@@ -29,8 +29,7 @@ class deval:
                     background : bool = False, # This is the key that we need to change to false
                     verbose: bool = True, # print verbose output
                     path : str= None, # the storage path for the model eval, if not null then the model eval is stored in this directory
-                    storage_path = '~/.deval'
-
+                    storage_path = '~/.deval',
                  **kwargs):  
         self.storage_path = abspath(storage_path)
         self.epochs = 0 # the number of epochs
@@ -158,3 +157,6 @@ class deval:
 
     def util(self, util_name):
         return self.module(f'deval.utils.{util_name}')
+
+    def get_key(self, key='fam', crypto_type='ecdsa'):
+        return self.module('deval.key')().get_key(key, crypto_type=crypto_type)

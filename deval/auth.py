@@ -3,9 +3,9 @@ import hmac
 import json
 import time
 from typing import Dict, Optional, Any
-import commune as c
+import deval as d
 
-class JWT:
+class Auth:
 
     def check_crypto_type(self, crypto_type):
         assert crypto_type in ['ecdsa', 'sr25519'], f'Invalid crypto_type {crypto_type}'
@@ -20,7 +20,7 @@ class JWT:
             JWT token string
         """
         if isinstance(key, str) or key == None:
-            key = c.get_key(key, crypto_type=crypto_type)
+            key = d.get_key(key, crypto_type=crypto_type)
         else:
             key = key
         self.check_crypto_type(crypto_type)
