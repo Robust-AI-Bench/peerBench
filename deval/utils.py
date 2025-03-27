@@ -249,7 +249,6 @@ def thread(fn: Union['callable', str],
                 tag_seperator:str='::', 
                 **extra_kwargs):
     import threading
-    import commune as c
     
     if args == None:
         args = []
@@ -704,3 +703,169 @@ def _base64url_decode(self, data):
 
 def is_generator(x):
     return hasattr(x, '__next__') or hasattr(x, '__iter__')
+
+
+def resolve_console( console = None, **kwargs):
+    import logging
+    from rich.logging import RichHandler
+    from rich.console import Console
+    logging.basicConfig( handlers=[RichHandler()])   
+    return Console()
+
+
+
+
+def log( *text:str, 
+            color:str=None, 
+            verbose:bool = True,
+            console: 'Console' = None,
+            flush:bool = False,
+            buffer:str = None,
+            **kwargs):
+            
+    if not verbose:
+        return 
+    if color == 'random':
+        color = random_color()
+    if color:
+        kwargs['style'] = color
+    
+    if buffer != None:
+        text = [buffer] + list(text) + [buffer]
+
+    console = resolve_console(console)
+    try:
+        if flush:
+            console.print(**kwargs, end='\r')
+        console.print(*text, **kwargs)
+    except Exception as e:
+        print(e)
+
+
+def submit_future(func, *args, **kwargs):
+    """
+    Submit a function to be executed in a separate thread
+    """
+    t = threading.Thread(target=func, args=args, kwargs=kwargs)
+    t.start()
+    return t
+
+from typing import *
+import asyncio
+thread_map = {}
+
+def submit_fn(func, args=None, kwargs=None, timeout=None):
+    """
+    Submit a function to be executed in a separate thread
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    
+    ThreadPoolExecutor = ThreadPoolExecutor(max_workers=128)
+    if args is None:
+        args = []
+    if kwargs is None:
+        kwargs = {}
+    
+    t = ThreadPoolExecutor.submit(func, *args, **kwargs)
+    return t
+
+
+def wait(futures:list, timeout:int = None, generator:bool=False, return_dict:bool = True) -> list:
+    is_singleton = bool(not isinstance(futures, list))
+
+    futures = [futures] if is_singleton else futures
+
+    if len(futures) == 0:
+        return []
+    if is_coroutine(futures[0]):
+        return gather(futures, timeout=timeout)
+    
+    future2idx = {future:i for i,future in enumerate(futures)}
+
+    if timeout == None:
+        if hasattr(futures[0], 'timeout'):
+            timeout = futures[0].timeout
+        else:
+            timeout = 30
+
+    if generator:
+        def get_results(futures):
+            import concurrent 
+            try: 
+                for future in concurrent.futures.as_completed(futures, timeout=timeout):
+                    if return_dict:
+                        idx = future2idx[future]
+                        yield {'idx': idx, 'result': future.result()}
+                    else:
+                        yield future.result()
+            except Exception as e:
+                yield None
+            
+    else:
+        def get_results(futures):
+            import concurrent
+            results = [None]*len(futures)
+            try:
+                for future in concurrent.futures.as_completed(futures, timeout=timeout):
+                    idx = future2idx[future]
+                    results[idx] = future.result()
+                    del future2idx[future]
+                if is_singleton: 
+                    results = results[0]
+            except Exception as e:
+                unfinished_futures = [future for future in futures if future in future2idx]
+                print(f'Error: {e}, {len(unfinished_futures)} unfinished futures with timeout {timeout} seconds')
+            return results
+
+    return get_results(futures)
+
+
+def as_completed(futures:list, timeout:int=10, **kwargs):
+    import concurrent
+    return concurrent.futures.as_completed(futures, timeout=timeout)
+
+def is_coroutine(future):
+    """
+    is this a thread coroutine?
+    """
+    return hasattr(future, '__await__')
+
+def thread(fn: Union['callable', str],  
+                args:list = None, 
+                kwargs:dict = None, 
+                daemon:bool = True, 
+                name = None,
+                tag = None,
+                start:bool = True,
+                tag_seperator:str='::', 
+                **extra_kwargs):
+    import threading
+    if args == None:
+        args = []
+    if kwargs == None:
+        kwargs = {}
+
+    assert callable(fn), f'target must be callable, got {fn}'
+    assert  isinstance(args, list), f'args must be a list, got {args}'
+    assert  isinstance(kwargs, dict), f'kwargs must be a dict, got {kwargs}'
+    
+    # unique thread name
+    if name == None:
+        name = fn.__name__
+        cnt = 0
+        while name in thread_map:
+            cnt += 1
+            if tag == None:
+                tag = ''
+            name = name + tag_seperator + tag + str(cnt)
+    
+    if name in thread_map:
+        thread_map[name].join()
+
+    t = threading.Thread(target=fn, args=args, kwargs=kwargs, **extra_kwargs)
+    # set the time it starts
+    t.daemon = daemon
+    if start:
+        t.start()
+    thread_map[name] = t
+    return t

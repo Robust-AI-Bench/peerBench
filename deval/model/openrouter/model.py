@@ -2,11 +2,14 @@ from typing import Generator
 import requests
 import json
 import openai
-import commune as c
+import deval as d
 import random
+import os
+import time
 
 class OpenRouter:
-    api_key_path = 'api/openrouter' # path to store api keys (relative to storage_path)
+    storage_path = os.path.expanduser('~/.deval/model/openrouter') # path to store models (relative to storage_path) 
+    api_key_path = f'{storage_path}/api.json' # path to store api keys (relative to storage_path)
     def __init__(
         self,
         api_key = None,
@@ -107,47 +110,72 @@ class OpenRouter:
         """
         get the api keys
         """
-        keys = c.get(self.api_key_path, [])
+        keys = self.get(self.api_key_path, [])
         if len(keys) > 0:
             return random.choice(keys)
         else:
             return 'password'
 
+
+    def get(self, path, default=None,  update=False):
+        """
+        Get the json file from the path
+        """
+        if update :
+            return default
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, str):
+                    data = json.loads(data)
+                return data
+        except Exception as e:
+            return default
+
+        
+    def put(self, path, data):
+        """
+        Put the json file to the path
+        """
+        dirpqth = os.path.dirname(path)
+        if not os.path.exists(dirpqth):
+            os.makedirs(dirpqth)
+        with open(path, 'w') as f:
+            json.dump(data, f)
+        return {'status': 'success', 'path': path}
+
     def keys(self):
         """
         Get the list of API keys
         """
-        return c.get(self.api_key_path, [])
+        try:
+            return self.get(self.api_key_path, [])
+        except Exception as e:
+            return []
 
     def add_key(self, key):
-        keys = c.get(self.api_key_path, [])
+        keys = self.keys()
         keys.append(key)
         keys = list(set(keys))
-        c.put(self.api_key_path, keys)
+        self.put(self.api_key_path, keys)
         return keys
 
-    @staticmethod
-    def resolve_path(path):
-        return c.storage_path + '/openrouter/' + path
+    def resolve_path(self, path):
+        return 
 
-    def model2info(self, search: str = None, path='models', max_age=100, update=False):
-        path = self.resolve_path(path)
-        models = c.get(path, default={}, max_age=max_age, update=update)
+    def model2info(self, search: str = None, update=False):
+        path =  f'{self.storage_path}/models.json'
+        models = self.get(path, default={}, update=update)
         if len(models) == 0:
-            print('Updating models...')
             response = requests.get(self.base_url + '/models')
             models = json.loads(response.text)['data']
-            c.put(path, models)
+            self.put(path, models)
         models = self.filter_models(models, search=search)
         return {m['id']:m for m in models}
     
-    def models(self, search: str = None, path='models', max_age=60, update=False):
-        return list(self.model2info(search=search, path=path, max_age=max_age, update=update).keys())
+    def models(self, search: str = None, update=False):
+        return list(self.model2info(search=search,  update=update).keys())
 
-    
-    def model_infos(self, search: str = None, path='models', max_age=0, update=False):
-        return list(self.model2info(search=search, path=path, max_age=max_age, update=update).values())
-    
     def get_model_info(self, model):
         model = self.resolve_model(model)
         model2info = self.model2info()
@@ -166,15 +194,18 @@ class OpenRouter:
         models = [m for m in models if any([s in m['id'] for s in search])]
         return [m for m in models]
     
-    def pricing(self, search: str = None , ascending=False, sortby='completion',  **kwargs):
-        pricing =  [{'name': k , **v['pricing']} for k,v in self.model2info(search=search, **kwargs).items()]
-        return c.df(pricing).sort_values(sortby, ascending=ascending)
-    
     def test(self):
-        response  =  self.forward('Hello, how are you?', stream=False)
-        print(response)
-        assert isinstance(response, str)
+        params = dict(
+        message = 'Hello, how are you?',
+        stream = False
+        )
+        result  =  self.forward(**params)
+        assert isinstance(result, str)
         print('Test passed')
-        stream_response = self.forward('Hello, how are you?', stream=True)
-        print(next(stream_response))
-        return {'status': 'success'}
+        params = dict(
+        message = 'Hello, how are you?',
+        stream = True
+        )
+        stream_result = self.forward(**params)
+        print(next(stream_result))
+        return {'status': 'success', 'params_stream': params, 'params': params, 'result': result, 'stream_result': stream_result}

@@ -6,7 +6,6 @@ import os
 from .utils import *
 from typing import *
 import inspect
-import commune as c
 import tqdm
 from functools import partial
 import sys
@@ -89,6 +88,7 @@ class deval:
 
     def score_model(self,  model:dict, **kwargs):
         t0 = time.time() # the timestamp
+        print(f'Scoring model {model} ({self.epochs})')
         model_fn = lambda **kwargs : self.provider.forward(model=model,  **kwargs)
         data = self.task.forward(model_fn)
         extra_data = {
@@ -119,21 +119,32 @@ class deval:
     def epoch(self, task=None,  **kwargs):
         if task != None:
             self.set_task(task)
+
+        from concurrent.futures import ThreadPoolExecutor
+        threadpool = ThreadPoolExecutor(max_workers=128)
         n = len(self.models)
         batched_models = [self.models[i:i+self.batch_size] for i in range(0, n, self.batch_size)]
         num_batches = len(batched_models)
         results = []
         results_count = 0
         for i, model_batch in enumerate(batched_models):
-            futures = [c.submit(self.score_model, [m], timeout=self.timeout) for m in model_batch]
+            print(f'Batch {i+1}/{num_batches} ({len(model_batch)})')
+            futures = []
+            for m in model_batch:
+                future = threadpool.submit(self.score_model, m)
+                futures.append(future)
+                
             try:
-                for f in c.as_completed(futures, timeout=self.timeout):
-                    r = f.result()
-                    if isinstance(r, dict) and 'score' in r:
-                        results.append(r)
-                        print({'score': r['score'], 'model': r['model']})
-                    else:
-                        print('Invalid result', r) if self.verbose else ''
+                for f in tqdm.tqdm(as_completed(futures), total=len(futures), desc='Scoring models'):
+                    try:
+                        r = f.result()
+                        if isinstance(r, dict) and 'score' in r:
+                            results.append(r)
+                            print({'score': r['score'], 'model': r['model']})
+                        else:
+                            print('Invalid result', r) if self.verbose else ''
+                    except Exception as e:
+                        print('Error', e)
             except TimeoutError as e:
                 print('Timeout Error', e)
 
