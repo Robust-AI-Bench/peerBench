@@ -166,11 +166,11 @@ def shorten_name(name:str, max_length=20) -> str:
     for chunk in chunks:
         if len(new_name) + len(chunk) > max_length:
             break
+        if chunk in new_name:
+            continue
         new_name += chunk + '.'
     if new_name.endswith('.'):
         new_name = new_name[:-1]
-
-
     return new_name
 
 
@@ -183,14 +183,20 @@ def objs(path='./', **kwargs) -> List[str]:
     
     return classes
 
-def tree(path='./', depth=4, **kwargs) -> Dict[str, List[str]]:
+def tree(path='./', search=None,  **kwargs) -> Dict[str, List[str]]:
     result = {}
     for o in objs(path, **kwargs):
         short_name = shorten_name(o)
         name = o
+        if search and search not in name:
+            continue
         result[short_name] = name
+    
     return result
 
+
+def modules(path='./', search=None, **kwargs) -> List[str]:
+    return list(tree(path=path, search=search).keys())
 
 def obj(name:str, **kwargs):
     if '.' in name:
@@ -598,14 +604,13 @@ def valid_h160_address(cls, address):
     
     return True
 
-def is_mnemonic(mnemonic:str) -> bool:
+def is_mnemonic(mnemonic:str, language_code='en') -> bool:
     """
     Check if the provided string is a valid mnemonic
     """
     if not isinstance(mnemonic, str):
         return False
-    return bip39_validate(mnemonic, self.language_code)
-
+    return bip39_validate(mnemonic, language_code)
 
 def get_json( path):
     with open(path) as f:
@@ -632,3 +637,70 @@ def abspath(path):
 def import_module(import_path:str ) -> 'Object':
     from importlib import import_module
     return import_module(import_path)
+
+def df(x):
+    import pandas as pd
+    return pd.DataFrame(x)
+
+
+def str2python( x):
+    x = str(x)
+    if isinstance(x, str) :
+        if x.startswith('py(') and x.endswith(')'):
+            try:
+                return eval(x[3:-1])
+            except:
+                return x
+    if x.lower() in ['null'] or x == 'None':  # convert 'null' or 'None' to None
+        return None 
+    elif x.lower() in ['true', 'false']: # convert 'true' or 'false' to bool
+        return bool(x.lower() == 'true')
+    elif x.startswith('[') and x.endswith(']'): # this is a list
+        try:
+            list_items = x[1:-1].split(',')
+            # try to convert each item to its actual type
+            x =  [str2python(item.strip()) for item in list_items]
+            if len(x) == 1 and x[0] == '':
+                x = []
+            return x
+        except:
+            # if conversion fails, return as string
+            return x
+    elif x.startswith('{') and x.endswith('}'):
+        # this is a dictionary
+        if len(x) == 2:
+            return {}
+        try:
+            dict_items = x[1:-1].split(',')
+            # try to convert each item to a key-value pair
+            return {key.strip(): str2python(value.strip()) for key, value in [item.split(':', 1) for item in dict_items]}
+        except:
+            # if conversion fails, return as string
+            return x
+    else:
+        # try to convert to int or float, otherwise return as string
+        
+        for type_fn in [int, float]:
+            try:
+                return type_fn(x)
+            except ValueError:
+                pass
+    return x
+
+def _base64url_encode(self, data):
+    """Encode data in base64url format"""
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    elif isinstance(data, dict):
+        data = json.dumps(data, separators=(',', ':')).encode('utf-8')
+    encoded = base64.urlsafe_b64encode(data).rstrip(b'=')
+    return encoded.decode('utf-8')
+
+def _base64url_decode(self, data):
+    """Decode base64url data"""
+    padding = b'=' * (4 - (len(data) % 4))
+    return base64.urlsafe_b64decode(data.encode('utf-8') + padding)
+
+
+def is_generator(x):
+    return hasattr(x, '__next__') or hasattr(x, '__iter__')

@@ -8,6 +8,8 @@ from typing import *
 import inspect
 import commune as c
 import tqdm
+from functools import partial
+import sys
 
 class deval:
 
@@ -29,18 +31,17 @@ class deval:
                     background : bool = False, # This is the key that we need to change to false
                     verbose: bool = True, # print verbose output
                     path : str= None, # the storage path for the model eval, if not null then the model eval is stored in this directory
-                    storage_path = '~/.deval',
                  **kwargs):  
-        self.storage_path = abspath(storage_path)
+
         self.epochs = 0 # the number of epochs
         self.epoch_time = 0
         self.timeout = timeout
         self.batch_size = batch_size
         self.verbose = verbose
-        self.key = c.get_key(key, crypto_type=crypto_type)
+        self.key = self.get_key(key, crypto_type=crypto_type)
         self.tempo = tempo
-        self.set_provider(provider)
         self.auth = self.module(auth)()
+        self.set_provider(provider)
         self.set_task(task)
         shuffle(self.models)
         self.models = self.models[:n]
@@ -64,7 +65,6 @@ class deval:
         assert callable(self.task.forward), f'No task function in task {task}'
         self.task_id = sha256(inspect.getsource(self.task.forward))
         self.storage = self.module(storage)(f'{task_results_path}/{self.task_name}')
-        print(f'Task set to {task}')
         return {'success': True, 'msg': 'Task set', 'task': task, 'task_id': self.task_id, }
 
     def wait_for_epoch(self):
@@ -100,21 +100,21 @@ class deval:
             'provider': self.provider_name
         }
         data.update(extra_data)
+        data['token'] = self.auth.get_token(data)
         assert self.auth.verify_token(data['token']), 'Failed to verify token'
         self.storage.put(f"{data['model']}/{data['time']}.json", data)
         return data
 
     def results(self, **kwargs):
-        df =  self.df(self.storage.items())[self.task.show_features]
-        df = df.sort_values(by=self.task.sort_by, ascending=self.task.sort_by_asc )
-        return df
-
-    def df(self, x):
-        import pandas as pd
-        return pd.DataFrame(x)
+        results =  df(self.storage.items())[self.task.show_features]
+        results = results.sort_values(by=self.task.sort_by, ascending=self.task.sort_by_asc )
+        return results
 
     def _rm_all(self):
         return self.storage._rm_all()
+
+    def tasks(self):
+        return [t.split('task.')[-1] for t in  modules(search='task')]
 
     def epoch(self, task=None,  **kwargs):
         if task != None:
@@ -132,6 +132,8 @@ class deval:
                     if isinstance(r, dict) and 'score' in r:
                         results.append(r)
                         print({'idx': len(results) + 1, 'model': r['model'], 'score': r['score']})
+                    else:
+                        print('Invalid result', r)
             except TimeoutError as e:
                 print('Timeout Error', e)
 
@@ -139,9 +141,9 @@ class deval:
         self.epoch_time = time.time()
         if len(results) == 0:
             return {'success': False, 'msg': 'No results to vote on'}
-        df =  self.df(results)[self.task.show_features]
-        df = df.sort_values(by=self.task.sort_by, ascending=False)
-        return df
+        results =  df(results)[self.task.show_features]
+        results = results.sort_values(by=self.task.sort_by, ascending=False)
+        return results
 
     def module(self, module_name):
         return module(module_name)
@@ -160,3 +162,79 @@ class deval:
 
     def get_key(self, key='fam', crypto_type='ecdsa'):
         return self.module('deval.key')().get_key(key, crypto_type=crypto_type)
+
+    def add_key(self, key='fam', crypto_type='ecdsa'):
+        return self.get_key().add_key(key, crypto_type=crypto_type)
+
+    def keys(self, crypto_type='ecdsa'):
+        return self.get_key().keys(crypto_type=crypto_type)
+
+    def sign(self, data, **kwargs):
+        return self.key.sign(data, **kwargs)
+    
+    def verify(self, data, signature, address, **kwargs):
+        return self.key.verify(data, signature, address, **kwargs)
+
+    @classmethod
+    def add_globals(cls, globals_input:dict = None):
+        """
+        add the functions and classes of the module to the global namespace
+        """
+        globals_input = globals_input or {}
+        for k,v in deval.__dict__.items():
+            globals_input[k] = v     
+        for f in dir(deval):
+            def wrapper_fn(f, *args, **kwargs):
+                fn = getattr(deval(), f)
+                return fn(*args, **kwargs)
+            globals_input[f] = partial(wrapper_fn, f)
+
+    def forward(self, *args, **kwargs):
+        return {'success': False, 'msg': 'No forward function defined'}
+
+    @classmethod
+    def init(cls, **kwargs):
+        for util in cls().utils():
+            def wrapper_fn(util, *args, **kwargs):
+                import importlib
+                fn = obj(f'deval.utils.{util}')
+                return fn(*args, **kwargs)
+            setattr(deval, util, partial(wrapper_fn, util))
+
+    def run_cli(self):
+        home_path = os.path.expanduser('~')
+        pwd = os.getcwd()
+        t0 = time.time()
+        argv = sys.argv[1:]
+        if len(argv) > 0:
+            fn = argv.pop(0)
+        if fn.endswith('/'):
+            fn += default_fn
+        if '/' in fn:
+            module_obj = module('/'.join(fn.split('/')[:-1]).replace('/', '.'))()
+            fn = fn.split('/')[-1]
+        else:
+            module_obj = self
+        fn_obj = getattr(module_obj, fn)
+        args = []
+        kwargs = {}
+        parsing_kwargs = False
+        for arg in argv:
+            if '=' in arg:
+                parsing_kwargs = True
+                key, value = arg.split('=')
+                kwargs[key] = str2python(value)
+            else:
+                assert parsing_kwargs is False, 'Cannot mix positional and keyword arguments'
+                args.append(str2python(arg))
+        print(f'Running(fn={module}/{fn} args={args} kwargs={kwargs})')
+    
+        output = fn_obj(*args, **kwargs) if callable(fn_obj) else fn_obj
+        duration = time.time() - t0
+        print(output)
+
+
+def main():
+    return deval().run_cli()
+
+deval.init()

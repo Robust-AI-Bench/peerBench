@@ -173,7 +173,6 @@ class Key:
         crypto_type = self.get_crypto_type(crypto_type)
         key2path = {}
         for p in  ls(self.storage_path):
-            print(f'checking path {p}')
             files = ls(f'{p}/{crypto_type}')
             if len(files) >= 1:
                 file2age = {f:os.path.getmtime(f) for f in files}
@@ -228,7 +227,6 @@ class Key:
                 result =  path + paths[0]
         except:
             pass
-        print(f'getting key path at {path}', paths)
         return result
 
     def get_key_data(self, key, crypto_type=None):
@@ -463,7 +461,8 @@ class Key:
             # Note: As Python apps are trusted sources on its own, no need to wrap data when signing from this lib
             verified = crypto_verify_fn(signature, b'<Bytes>' + data + b'</Bytes>', public_key)
         return verified
-        
+
+   
     def __str__(self):
         return  f'<Key(address={self.key_address} crypto_type={self.crypto_type}>'
 
@@ -548,3 +547,4 @@ class Key:
         
         return results
         
+

@@ -62,7 +62,7 @@ isort = "^5.13.2"
 pytest-cov = "^4.1.0"
 
 [tool.poetry.scripts]
-d = "deval.cli.cli:main"
+d = "deval.deval:main"
 
 [tool.mypy]
 files = ["deval"]

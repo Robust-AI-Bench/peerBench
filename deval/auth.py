@@ -7,9 +7,6 @@ import deval as d
 
 class Auth:
 
-    def check_crypto_type(self, crypto_type):
-        assert crypto_type in ['ecdsa', 'sr25519'], f'Invalid crypto_type {crypto_type}'
-
     def get_token(self, data: Dict='hey',  key:Optional[str]=None,   crypto_type: str = 'ecdsa', expiration: int = 3600, mode='bytes') -> str:
         """
         Generate a JWT token with the given data
@@ -23,7 +20,6 @@ class Auth:
             key = d.get_key(key, crypto_type=crypto_type)
         else:
             key = key
-        self.check_crypto_type(crypto_type)
         if not isinstance(data, dict):
             data = {'data': data }
         token_data = data.copy()        
@@ -80,7 +76,7 @@ class Auth:
         # Verify signature
         message = f"{header_encoded}.{data_encoded}"
         signature = self._base64url_decode(signature_encoded)
-        assert c.verify(data=message, signature=signature, address=data['iss'], crypto_type=headers['alg']), "Invalid token signature"
+        assert d.verify(data=message, signature=signature, address=data['iss'], crypto_type=headers['alg']), "Invalid token signature"
         # data['data'] = message
         data['time'] = data['iat'] # set time field for semanitcally easy people
         data['signature'] = '0x'+signature.hex()
