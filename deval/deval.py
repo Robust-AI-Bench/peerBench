@@ -29,7 +29,7 @@ class deval:
                     timeout : int = 4, # timeout per evaluation of the model
                     update : bool =True, # update during the first epoch
                     background : bool = False, # This is the key that we need to change to false
-                    verbose: bool = True, # print verbose output
+                    verbose: bool = False, # print verbose output
                     path : str= None, # the storage path for the model eval, if not null then the model eval is stored in this directory
                  **kwargs):  
 
@@ -131,9 +131,9 @@ class deval:
                     r = f.result()
                     if isinstance(r, dict) and 'score' in r:
                         results.append(r)
-                        print({'idx': len(results) + 1, 'model': r['model'], 'score': r['score']})
+                        print({'score': r['score'], 'model': r['model']})
                     else:
-                        print('Invalid result', r)
+                        print('Invalid result', r) if self.verbose else ''
             except TimeoutError as e:
                 print('Timeout Error', e)
 
@@ -189,8 +189,8 @@ class deval:
                 return fn(*args, **kwargs)
             globals_input[f] = partial(wrapper_fn, f)
 
-    def forward(self, *args, **kwargs):
-        return {'success': False, 'msg': 'No forward function defined'}
+    def forward(self, model='microsoft/wizardlm-2-7b'):
+        return self.score_model(model)
 
     @classmethod
     def init(cls, **kwargs):
@@ -201,18 +201,19 @@ class deval:
                 return fn(*args, **kwargs)
             setattr(deval, util, partial(wrapper_fn, util))
 
-    def run_cli(self):
-        home_path = os.path.expanduser('~')
-        pwd = os.getcwd()
+    def cli(self) -> None:
+        """
+        Run the command line interface
+        """
         t0 = time.time()
         argv = sys.argv[1:]
-        if len(argv) > 0:
-            fn = argv.pop(0)
-        if fn.endswith('/'):
-            fn += default_fn
+        fn = argv.pop(0)
         if '/' in fn:
             module_obj = module('/'.join(fn.split('/')[:-1]).replace('/', '.'))()
+            if fn.endswith('/'):
+                fn = 'forward'
             fn = fn.split('/')[-1]
+
         else:
             module_obj = self
         fn_obj = getattr(module_obj, fn)
@@ -235,6 +236,6 @@ class deval:
 
 
 def main():
-    return deval().run_cli()
+    return deval().cli()
 
 deval.init()
