@@ -1,98 +1,80 @@
-# deval: Decentralized Evaluation Framework
+# Deval - Decentralized Evaluation Framework
 
-deval is a robust, scalable system designed to evaluate AI model performance across distributed networks. By leveraging cryptographic verification and standardized benchmarking, deval enables transparent, secure, and reproducible model evaluation.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Features
+Deval is a powerful, flexible framework for evaluating and benchmarking language models in a decentralized manner. It provides tools for creating standardized tasks, running evaluations across multiple models, and securely storing and verifying results.
 
-- Cryptographically signed evaluation results
-- Pluggable task modules for diverse evaluation scenarios
-- Distributed evaluation across multiple models
-- Persistent storage of evaluation results
-- Configurable evaluation parameters
-- Support for various model providers
+## 🚀 Features
 
-## Installation
+- **Decentralized Evaluation**: Run evaluations across multiple providers and models
+- **Secure Authentication**: Cryptographic signing of evaluation results with multiple key types (ECDSA, SR25519, ED25519)
+- **Flexible Task System**: Create custom evaluation tasks with standardized interfaces
+- **Model Provider Abstraction**: Support for multiple model providers through a unified interface
+- **Persistent Storage**: Save and retrieve evaluation results
+- **Parallel Execution**: Efficiently evaluate multiple models in parallel
+
+## 📋 Installation
 
 ```bash
-git clone https://github.com/yourusername/deval.git
-cd deval
-pip install -e .
+pip install deval
 ```
 
-## Quick Start
+## 🔧 Quick Start
 
 ```python
-from deval import deval
+import deval as d
 
-# Initialize the evaluator
-evaluator = deval(
-    task='add',              # The evaluation task
-    provider='model.openrouter',  # The model provider
-    batch_size=64,           # Parallel evaluation batch size
-    n=64,                    # Number of models to evaluate
-    timeout=4                # Timeout per evaluation
+# Initialize deval with default settings
+deval = d.deval(
+    task='add',               # Task to evaluate
+    provider='model.openrouter',  # Model provider
+    batch_size=16,            # Number of parallel evaluations
+    n=10                      # Number of models to evaluate
 )
 
 # Run an evaluation epoch
-results = evaluator.epoch()
+results = deval.epoch()
 
-# Display results
+# View the results
 print(results)
 ```
 
-## Components
+## 🔐 Authentication
 
-### Authentication System (JWT)
-
-The JWT authentication system provides cryptographic verification for evaluation results:
+Deval uses cryptographic signatures to ensure the integrity and authenticity of evaluation results:
 
 ```python
-from deval.auth import JWT
+# Create a new key
+key = d.get_key('my_key', crypto_type='ecdsa')
 
-# Create a JWT instance
-jwt = JWT()
+# Sign some data
+signature = key.sign("Hello, world!")
 
-# Generate a token
-token = jwt.get_token(data={'task': 'add', 'score': 0.95})
-
-# Verify a token
-decoded = jwt.verify_token(token)
+# Verify the signature
+is_valid = d.verify(data="Hello, world!", signature=signature, address=key.key_address)
 ```
 
-### Storage System
+The framework supports multiple cryptographic schemes:
+- ECDSA (Ethereum-compatible)
+- SR25519 (Substrate/Polkadot)
+- ED25519 (widely used in cryptography)
 
-The storage system provides persistent storage of evaluation results:
+## 🧪 Creating Custom Tasks
 
-```python
-from deval.storage import Storage
-
-# Create a storage instance
-storage = Storage('~/.deval/results')
-
-# Store data
-storage.put('model1/result1.json', {'score': 0.95})
-
-# Retrieve data
-data = storage.get('model1/result1.json')
-```
-
-### Task Modules
-
-Task modules define specific evaluation scenarios:
+Tasks define how models are evaluated. Create a custom task by defining a class with a `forward` method:
 
 ```python
-# Example task module
 class MyTask:
-    features = ['params', 'result', 'target', 'score', 'model']
-    show_features = ['params', 'result', 'target', 'score', 'model']
-    sort_by = ['score']
-    sort_by_asc = [False]
+    features = ['params', 'result', 'target', 'score', 'model', 'provider', 'token']
+    show_features = ['params', 'result', 'target', 'score', 'model', 'duration']
+    sort_by = ['score', 'duration']
+    sort_by_asc = [False, True]
     
     def forward(self, model):
-        # Task implementation
-        params = {'message': 'test input'}
+        # Your evaluation logic here
+        params = {'message': 'What is 2+2?'}
         result = model(**params)
-        target = 'expected output'
+        target = '4'
         
         data = {
             'params': params,
@@ -101,78 +83,121 @@ class MyTask:
         }
         data['score'] = self.score(data)
         return data
-
+    
     def score(self, data):
-        # Scoring implementation
-        return 1.0 if data['result'] == data['target'] else 0.0
+        return int(data['target'] in data['result'])
 ```
 
-### Model Providers
+## 🔌 Model Providers
 
-Model providers serve as interfaces to various AI model APIs:
+Deval abstracts away the differences between model providers. Currently supported:
+
+- OpenRouter
+- LiteLLM (supporting multiple backend providers)
+
+Adding a new provider is as simple as implementing the provider interface:
 
 ```python
-# Using the OpenRouter provider
-from deval.model.openrouter import OpenRouter
-
-provider = OpenRouter(api_key='your-api-key')
-models = provider.models()
-response = provider.forward(
-    message="Hello, how are you?",
-    model="anthropic/claude-3.7-sonnet"
-)
+class MyProvider:
+    def __init__(self, api_key=None, **kwargs):
+        # Initialize your provider
+        pass
+        
+    def forward(self, model, message, **kwargs):
+        # Implement model inference
+        pass
+        
+    def models(self):
+        # Return available models
+        return ['model1', 'model2']
 ```
 
-## Running Evaluations
+## 📊 Storing and Analyzing Results
 
-### Single Epoch
+Results are automatically stored and can be retrieved for analysis:
 
 ```python
-# Run a single evaluation epoch
-results = evaluator.epoch()
+# Get all results for the current task
+all_results = deval.results()
+
+# Display as a pandas DataFrame
+print(all_results)
 ```
 
-### Background Evaluation
+## 🔄 Continuous Evaluation
+
+Run evaluations in the background:
 
 ```python
-# Initialize with background=True to run continuous evaluations
-evaluator = deval(
+deval = d.deval(
     task='add',
-    provider='model.openrouter',
-    background=True,
-    tempo=3600  # Run every hour
+    background=True,  # Run evaluations in the background
+    tempo=3600        # Run every hour
 )
 ```
 
-### Customizing Tasks
+## 🛠️ Command Line Interface
 
-```python
-# Set a different task
-evaluator.set_task('custom_task')
+Deval includes a command-line interface for running evaluations:
 
-# Run with the new task
-results = evaluator.epoch()
+```bash
+python -m deval epoch --task=add --n=10
 ```
 
-## API Reference
+## 🧩 Architecture
 
-For detailed API documentation, please refer to the [API Reference](docs/api_reference.md).
+Deval consists of several key components:
 
-## Contributing
+1. **Core Engine** (`deval.py`): Manages the evaluation process
+2. **Authentication** (`auth.py`): Handles cryptographic signing and verification
+3. **Key Management** (`key.py`): Manages cryptographic keys
+4. **Storage** (`storage.py`): Persists evaluation results
+5. **Tasks** (`task/`): Defines evaluation tasks
+6. **Model Providers** (`model/`): Abstracts model APIs
+
+## 📚 API Reference
+
+### `deval`
+
+The main class for running evaluations.
+
+```python
+d.deval(
+    task='add',               # Task to evaluate
+    provider='model.openrouter',  # Model provider
+    batch_size=64,            # Number of parallel evaluations
+    key=None,                 # Key for signing results
+    tempo=3000,               # Time between epochs in seconds
+    n=64,                     # Number of models to evaluate
+    background=False,         # Run in background
+    verbose=False             # Print verbose output
+)
+```
+
+### `Key`
+
+Manages cryptographic keys for signing and verification.
+
+```python
+key = d.get_key('my_key', crypto_type='ecdsa')
+key.sign(data)
+key.verify(data, signature, address)
+```
+
+### `Auth`
+
+Handles JWT token generation and verification.
+
+```python
+auth = d.module('auth')()
+token = auth.get_token(data)
+verified_data = auth.verify_token(token)
+```
+
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## 📄 License
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Thanks to all contributors who have helped shape this project
-- Special thanks to the open-source community for providing valuable tools and libraries%
+This project is licensed under the MIT License - see the LICENSE file for details.%  
