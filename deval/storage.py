@@ -18,10 +18,15 @@ class Storage:
             json.dump(data, f)
         return path
 
-    def get(self, path):
+    def get(self, path, default=None, max_age=None, update=False):
         path = self.get_item_path(path)
         with open(path, 'r') as f:
             data = json.load(f)
+        if update:
+            max_age = 0
+        if max_age != None:
+            if time.time() - os.path.getmtime(path) > max_age:
+                data = default
         return data
 
     def get_item_path(self, path):
@@ -31,7 +36,6 @@ class Storage:
                 if not path.endswith(f'.{self.mode}'):
                     path = f'{path}.{self.mode}'
         return path
-
 
     def rm(self, path):
         path = self.get_item_path(path)
@@ -60,7 +64,18 @@ class Storage:
     def exists(self, path):
         path = self.get_item_path(path)
         return os.path.exists(path)
+        
 
+    def item2age(self):
+        """
+        returns the age of the item in seconds
+        """
+        paths = self.paths()
+        ages = {}
+        for p in paths:
+            ages[p] = time.time() - os.path.getmtime(p)
+        return ages
+        
     def n(self):
         paths = self.items()
         return len(paths)

@@ -31,7 +31,6 @@ class deval:
                     verbose: bool = False, # print verbose output
                     path : str= None, # the storage path for the model eval, if not null then the model eval is stored in this directory
                  **kwargs):  
-
         self.epochs = 0 # the number of epochs
         self.epoch_time = 0
         self.timeout = timeout
@@ -60,11 +59,11 @@ class deval:
 
     def set_task(self, task: str, task_results_path='~/.deval/results', storage='deval.storage'):
         self.task = self.module('task.'+task)()
-        self.task_name = task.lower()
+        self.task.task_name = task.lower()
         assert callable(self.task.forward), f'No task function in task {task}'
-        self.task_id = sha256(inspect.getsource(self.task.forward))
-        self.storage = self.module(storage)(f'{task_results_path}/{self.task_name}')
-        return {'success': True, 'msg': 'Task set', 'task': task, 'task_id': self.task_id, }
+        self.task.task_id = sha256(inspect.getsource(self.task.forward))
+        self.storage = self.module(storage)(f'{task_results_path}/{self.task.task_name}')
+        return {'success': True, 'msg': 'Task set', 'task': task, 'task_id': self.task.task_id, }
 
     def wait_for_epoch(self):
         while True:
@@ -86,9 +85,10 @@ class deval:
                 print('XXXXXXXXXX EPOCH ERROR ----> XXXXXXXXXX {e}')
         raise Exception('Background process has stopped')
 
-    def score_model(self,  model:dict, **kwargs):
+
+    def score_model(self,  model:dict, task=None, **kwargs):
         t0 = time.time() # the timestamp
-        print(f'Scoring model {model} ({self.epochs})')
+        print(f'Scoring({model}, task={self.task.task_name})')
         model_fn = lambda **kwargs : self.provider.forward(model=model,  **kwargs)
         data = self.task.forward(model_fn)
         extra_data = {
@@ -96,7 +96,7 @@ class deval:
             'time': t0,
             'duration': time.time() - t0,
             'vali': self.key.key_address,
-            'task_id': self.task_id,
+            'task_id': self.task.task_id,
             'provider': self.provider_name
         }
         data.update(extra_data)
@@ -158,7 +158,6 @@ class deval:
 
     def module(self, module_name):
         return module(module_name)
-
 
     def utils(self):
         from functools import partial
@@ -246,7 +245,16 @@ class deval:
         print(output)
 
 
+    def test(self, modules = ['key', 'auth']):
+        """
+        Test the deval module
+        """
+        for m in modules:
+            print(f'Testing {m}')
+            obj = self.module(m)()
+            obj.test()
+        return {'success': True, 'msg': 'All tests passed'}
+
 def main():
     return deval().cli()
-
 deval.init()

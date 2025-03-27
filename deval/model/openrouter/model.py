@@ -8,8 +8,7 @@ import os
 import time
 
 class OpenRouter:
-    storage_path = os.path.expanduser('~/.deval/model/openrouter') # path to store models (relative to storage_path) 
-    api_key_path = f'{storage_path}/api.json' # path to store api keys (relative to storage_path)
+
     def __init__(
         self,
         api_key = None,
@@ -17,6 +16,7 @@ class OpenRouter:
         timeout: float = None,
         prompt:str=None,
         max_retries: int = 10,
+        storage_path = '~/.deval/model/openrouter',
         **kwargs
     ):
         """
@@ -28,7 +28,10 @@ class OpenRouter:
             base_url (str, optional): can be used for openrouter api calls
             timeout (float, optional): The timeout value for the client. Defaults to None.
             max_retries (int, optional): The maximum number of retries for the client. Defaults to None.
+            storage_path (str, optional): The path to store the models. Defaults to '~/.deval/model/openrouter'.
         """
+        self.storage_path = os.path.abspath(os.path.expanduser(storage_path)) # path to store models (relative to storage_path) 
+        self.api_key_path = f'{self.storage_path}/api.json' # path to store api keys (relative to storage_path)
         self.base_url = base_url
         self.client = openai.OpenAI(
             base_url=self.base_url,

@@ -3,26 +3,27 @@
 
 FROM ubuntu:22.04
 
-#SYSTEM ENVIRONMENT
+# SYSTEM ENVIRONMENT
 ARG DEBIAN_FRONTEND=noninteractive
 RUN usermod -s /bin/bash root
-RUN apt-get update 
-
-#RUST ENVIRONMENT
-RUN apt-get install curl nano build-essential cargo libstd-rust-dev make -y
-
-#NPM ENVIRONMENT
-RUN apt-get install -y nodejs npm
-RUN npm install -g pm2 
-
-#PYTHON ENVIRONMENT
-RUN apt-get install python3 python3-pip python3-venv -y
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    software-properties-common
 
 # INSTALL DOCKER
-RUN apt-get install -y apt-transport-https ca-certificates curl gnupg2 software-properties-common
-RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-RUN apt-get install -y docker.io
+RUN mkdir -p /etc/apt/keyrings
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+RUN echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+RUN apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 RUN groupadd docker || true
 RUN usermod -aG docker root
 EXPOSE 2375
@@ -32,5 +33,5 @@ WORKDIR /app
 COPY . .
 RUN pip install -e ./
 
-# ENTRYPOINT (default to container running in the background in case of no command)
-ENTRYPOINT [ "tail", "-f", "/dev/null"]
+# ENTRYPOINT (default to container running)
+ENTRYPOINT ["tail", "-f", "/dev/null"]
