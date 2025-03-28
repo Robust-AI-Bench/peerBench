@@ -17,6 +17,7 @@ docker run -d \
   --restart unless-stopped \
   --privileged --shm-size 4g \
   -v $PWD:/app \
+  -v /root/.{$REPO}:/root/.{$REPO} \
   -v /var/run/docker.sock:/var/run/docker.sock \
   $REPO
 

@@ -27,7 +27,7 @@ import deval as d
 # Initialize deval with default settings
 deval = d.deval(
     task='add',               # Task to evaluate
-    provider='model.openrouter',  # Model provider
+    provider='providers.openrouter',  # Model provider
     batch_size=16,            # Number of parallel evaluations
     n=10                      # Number of models to evaluate
 )
@@ -164,7 +164,7 @@ The main class for running evaluations.
 ```python
 d.deval(
     task='add',               # Task to evaluate
-    provider='model.openrouter',  # Model provider
+    provider='providers.openrouter',  # Model provider
     batch_size=64,            # Number of parallel evaluations
     key=None,                 # Key for signing results
     tempo=3000,               # Time between epochs in seconds

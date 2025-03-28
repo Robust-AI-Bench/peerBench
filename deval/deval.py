@@ -15,10 +15,10 @@ class deval:
     def __init__(self,
                     search : Optional[str] =  None, # (OPTIONAL) the search string for the network 
                     batch_size : int = 64, # the batch size of the most parallel tasks
-                    task : Union['callable', int]= 'add', # score function
+                    task : str= 'livebench', # score function
                     key : str = None, # the key for the model
                     tempo : int = 3000, # the time between epochs
-                    provider = 'model.openrouter',
+                    provider = 'providers.openrouter',
                     crypto_type='ecdsa',
                     auth = 'auth',
                     storage = 'storage',
@@ -48,7 +48,7 @@ class deval:
 
     def set_provider(self, provider):
         self.provider = self.module(provider)()
-        provider_prefix = 'deval.model.'
+        provider_prefix = 'deval.providers.'
         if provider.startswith(provider_prefix):
             provider_name = provider[len(provider_prefix):]
         else:
@@ -100,10 +100,15 @@ class deval:
             'provider': self.provider_name
         }
         data.update(extra_data)
-        data['token'] = self.auth.get_token(data)
+        data['hash'] = sha256(data)
+        data['token'] = self.auth.get_token(data['hash'], key=self.key)
         assert self.auth.verify_token(data['token']), 'Failed to verify token'
         self.storage.put(f"{data['model']}/{data['time']}.json", data)
         return data
+
+    #TODO: implement the aggregate score function to aggregate the scores of the models
+    def aggregate_score(self, task=None, **kwargs):
+        raise NotImplementedError('Aggregate score not implemented yet')
 
     def results(self, **kwargs):
         results =  df(self.storage.items())[self.task.show_features]
@@ -133,7 +138,6 @@ class deval:
             for m in model_batch:
                 future = threadpool.submit(self.score_model, m)
                 futures.append(future)
-                
             try:
                 for f in tqdm.tqdm(as_completed(futures), total=len(futures), desc='Scoring models'):
                     try:
@@ -239,7 +243,6 @@ class deval:
                 assert parsing_kwargs is False, 'Cannot mix positional and keyword arguments'
                 args.append(str2python(arg))
         print(f'Running(fn={module}/{fn} args={args} kwargs={kwargs})')
-    
         output = fn_obj(*args, **kwargs) if callable(fn_obj) else fn_obj
         duration = time.time() - t0
         print(output)

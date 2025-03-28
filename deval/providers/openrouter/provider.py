@@ -1,20 +1,16 @@
-from typing import Generator
-import requests
-import json
-import openai
-import deval as d
-import random
 import os
-import time
+import json
+import random
+import requests
+import openai
+from dotenv import load_dotenv
 
 class OpenRouter:
-
     def __init__(
         self,
-        api_key = None,
+        api_key: str = 'OPENROUTER_API_KEY',
         base_url: str = 'https://openrouter.ai/api/v1',
         timeout: float = None,
-        prompt:str=None,
         max_retries: int = 10,
         storage_path = '~/.deval/model/openrouter',
         **kwargs
@@ -30,35 +26,40 @@ class OpenRouter:
             max_retries (int, optional): The maximum number of retries for the client. Defaults to None.
             storage_path (str, optional): The path to store the models. Defaults to '~/.deval/model/openrouter'.
         """
+        # Load environment variables from .env file in the current working directory
+
+    
         self.storage_path = os.path.abspath(os.path.expanduser(storage_path)) # path to store models (relative to storage_path) 
         self.api_key_path = f'{self.storage_path}/api.json' # path to store api keys (relative to storage_path)
         self.base_url = base_url
+        self.api_key= self.get_api_key(api_key)
+        # Use API key from parameters, or from environment variable, or from stored keys
+
         self.client = openai.OpenAI(
             base_url=self.base_url,
-            api_key=api_key or self.get_key(),
+            api_key=self.api_key, 
             timeout=timeout,
             max_retries=max_retries,
         )
-        self.prompt = prompt
 
     def forward(
         self,
         message: str,
         *extra_text , 
-        history = None,
-        prompt: str =  None,
-        system_prompt: str = None,
+        history: list = None,
         stream: bool = False,
         model:str = 'anthropic/claude-3.7-sonnet',
         max_tokens: int = 10000000,
         temperature: float = 0,
+        verbose: bool = False,
+
         **kwargs
     ) -> str :
         """
-        Generates a response using the OpenAI language model.
+        Generates a response using the OpenAI language providers.
 
         Args:
-            message (str): The message to send to the language model.
+            message (str): The message to send to the language providers.
             history (ChatHistory): The conversation history.
             stream (bool): Whether to stream the response or not.
             max_tokens (int): The maximum number of tokens to generate.
@@ -67,13 +68,10 @@ class OpenRouter:
         Returns:
         Generator[str] | str: A generator for streaming responses or the full streamed response.
         """
-        prompt = prompt or system_prompt
         message = str(message)
         if len(extra_text) > 0:
             message = message + ' '.join(extra_text)
         history = history or []
-        prompt = prompt or self.prompt
-        message = message + prompt if prompt else message
         model = self.resolve_model(model)
         model_info = self.get_model_info(model)
         num_tokens = len(message)
@@ -88,7 +86,10 @@ class OpenRouter:
         if stream:
             def stream_generator( result):
                 for token in result:
-                    yield token.choices[0].delta.content
+                    token = token.choices[0].delta.content
+                    if verbose:
+                        print(token, end='', flush=True)
+                    yield token
             return stream_generator(result)
         else:
             return result.choices[0].message.content
@@ -100,7 +101,7 @@ class OpenRouter:
         model = str(model)
         if str(model) not in models:
             if ',' in model:
-                models = [m for m in models if any([s in m for s in model.split(',')])]
+                models = [m for m in models if any([s in m for s in providers.split(',')])]
             else:
                 models = [m for m in models if str(model) in m]
             print(f"Model {model} not found. Using {models} instead.")
@@ -109,11 +110,24 @@ class OpenRouter:
 
         return model
 
-    def get_key(self):
+    def get_api_key(self, api_key='OPENROUTER_API_KEY', save_key_if_not_found=True):
         """
         get the api keys
         """
-        keys = self.get(self.api_key_path, [])
+        keys = self.get_json(self.api_key_path, [])
+        load_dotenv()
+        if isinstance(api_key, str):
+            env_dict = os.environ
+            if api_key in env_dict:
+                env_var_found = True
+                # how to change the color of the text in the terminal
+                api_key = env_dict[api_key]
+            if env_var_found:
+                if save_key_if_not_found:
+                    keys.append(api_key)
+                    keys = list(set(keys))
+                    self.put_json(self.api_key_path, keys)
+        assert len(keys) > 0, f'No API key found. Please set the {api_key} environment variable or add a key to {self.api_key_path}'
         if len(keys) > 0:
             return random.choice(keys)
         else:
@@ -135,7 +149,6 @@ class OpenRouter:
         except Exception as e:
             return default
 
-        
     def put(self, path, data):
         """
         Put the json file to the path
@@ -151,16 +164,13 @@ class OpenRouter:
         """
         Get the list of API keys
         """
-        try:
-            return self.get(self.api_key_path, [])
-        except Exception as e:
-            return []
+        return self.get_json(self.api_key_path, [])
 
     def add_key(self, key):
         keys = self.keys()
         keys.append(key)
         keys = list(set(keys))
-        self.put(self.api_key_path, keys)
+        self.put_json(self.api_key_path, keys)
         return keys
 
     def resolve_path(self, path):
@@ -168,11 +178,11 @@ class OpenRouter:
 
     def model2info(self, search: str = None, update=False):
         path =  f'{self.storage_path}/models.json'
-        models = self.get(path, default={}, update=update)
+        models = self.get_json(path, default={}, update=update)
         if len(models) == 0:
-            response = requests.get(self.base_url + '/models')
+            response = requests.get_json(self.base_url + '/models')
             models = json.loads(response.text)['data']
-            self.put(path, models)
+            self.put_json(path, models)
         models = self.filter_models(models, search=search)
         return {m['id']:m for m in models}
     
@@ -197,7 +207,8 @@ class OpenRouter:
         models = [m for m in models if any([s in m['id'] for s in search])]
         return [m for m in models]
     
-    def test(self):
+    def test(self, **kwargs):
+        self = self.__class__(**kwargs)
         params = dict(
         message = 'Hello, how are you?',
         stream = False

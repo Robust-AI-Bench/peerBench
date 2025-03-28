@@ -10,13 +10,13 @@ class AddTask:
     temperature = 0
     max_tokens = 10000
 
-
     def get_sample(self ):
         return {'a': random.randint(1, 100), 'b': random.randint(1, 100)}
 
     def forward(self, model):
-        x = 'add two numbers {} and {}'.format(a, b)
         sample = self.get_sample()
+        a = sample['a']
+        b = sample['b']
         message =  {'input': sample, 
                  'goals': [
                     f'return a json object with the sum of {a} and {b}',

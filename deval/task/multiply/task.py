@@ -1,23 +1,20 @@
 import random
 import json
 class AddTask:
-    features = ['params', 'result', 'target', 'score', 'model', 'provider', 'token']
-    show_features = ['params', 'result', 'target', 'score', 'model', 'duration']
+    features = ['score', 'model', 'params', 'result', 'target', 'provider', 'token']
+    show_features = ['score', 'model', 'params', 'result', 'target', 'provider', 'token', 'duration']
     sort_by = ['score', 'duration']
     sort_by_asc = [False, True]
     description = 'tests a model to add two numberts'
     output_bounds = ['<OUTPUT_JSON>', '</OUTPUT_JSON>']
     temperature = 0
     max_tokens = 10000
-
-
-    def get_sample(self ):
-        return {'a': random.randint(1, 100), 'b': random.randint(1, 100)}
-
+    
     def forward(self, model):
+        a = random.randint(0, 100)
+        b = random.randint(0, 100)
         x = 'add two numbers {} and {}'.format(a, b)
-        sample = self.get_sample()
-        message =  {'input': sample, 
+        message =  {'input': str({'a': a, 'b': b}), 
                  'goals': [
                     f'return a json object with the sum of {a} and {b}',
                  ],
@@ -25,7 +22,7 @@ class AddTask:
                  }
         params = {'message': message,  'temperature': self.temperature, 'max_tokens': self.max_tokens}
              
-        target = a + b
+        target = a * b
         y =  model(**params)
         data = {
             'params': params,
@@ -37,6 +34,7 @@ class AddTask:
 
     def score(self, data):
         return int(str(data['target']) in  data['result'])
- 
+
+    
     def verify_sample(self, data):
         assert all([f in data for f in self.features]), f'Missing features {self.features}'
