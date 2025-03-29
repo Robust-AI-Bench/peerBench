@@ -72,7 +72,7 @@ class OpenRouter:
         if len(extra_text) > 0:
             message = message + ' '.join(extra_text)
         history = history or []
-        model = self.resolve_model(model)
+        model = self.get_model(model)
         model_info = self.get_model_info(model)
         num_tokens = len(message)
         max_tokens = min(max_tokens, model_info['context_length'] - num_tokens)
@@ -94,9 +94,7 @@ class OpenRouter:
         else:
             return result.choices[0].message.content
         
-    generate = forward
-
-    def resolve_model(self, model=None):
+    def get_model(self, model=None):
         models =  self.models()
         model = str(model)
         if str(model) not in models:
@@ -109,6 +107,24 @@ class OpenRouter:
             model = models[0]
 
         return model
+
+    def get_json(self, path, default=None , update=False):
+        if not os.path.exists(path) and not update:
+            return default
+        else:
+            with open(path, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, str):
+                    data = json.loads(data)
+            return data
+
+    def put_json(self, path, data):
+        dirpath = os.path.dirname(path)
+        if not os.path.exists(dirpath):
+            os.makedirs(dirpath)
+        with open(path, 'w') as f:
+            json.dump(data, f)
+        return {'status': 'success', 'path': path}
 
     def get_api_key(self, api_key='OPENROUTER_API_KEY', save_key_if_not_found=True):
         """
@@ -190,7 +206,7 @@ class OpenRouter:
         return list(self.model2info(search=search,  update=update).keys())
 
     def get_model_info(self, model):
-        model = self.resolve_model(model)
+        model = self.get_model(model)
         model2info = self.model2info()
         return model2info[model]
     
