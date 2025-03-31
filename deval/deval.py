@@ -110,7 +110,7 @@ class deval:
     def aggregate_score(self, task=None, **kwargs):
         raise NotImplementedError('Aggregate score not implemented yet')
 
-    def results(self, **kwargs):
+    def  results(self, **kwargs):
         results =  df(self.storage.items())[self.task.show_features]
         results = results.sort_values(by=self.task.sort_by, ascending=self.task.sort_by_asc )
         return results

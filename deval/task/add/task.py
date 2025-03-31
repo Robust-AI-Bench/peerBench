@@ -15,13 +15,15 @@ class AddTask:
         return {'a': random.randint(1, 100), 'b': random.randint(1, 100)}
 
     def forward(self, model):
-        x = 'add two numbers {} and {}'.format(a, b)
+        
         sample = self.get_sample()
+        a, b = sample['a'], sample['b']
+        x = 'add two numbers {} and {}'.format(a, b)
         message =  {'input': sample, 
                  'goals': [
                     f'return a json object with the sum of {a} and {b}',
                  ],
-                 'output_format': f' strictly as {self.output_bounds[0]}json(y:int){self.output_bounds[1]}'
+                 'output_format': f'strictly as {self.output_bounds[0]}json(y:int){self.output_bounds[1]}'
                  }
         params = {'message': message,  'temperature': self.temperature, 'max_tokens': self.max_tokens}
              

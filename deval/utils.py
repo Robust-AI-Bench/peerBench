@@ -67,6 +67,71 @@ def sha256(x) -> str:
     return hashlib.sha256(str(x).encode()).hexdigest()
 
 
+import argparse
+import hashlib
+import base64
+import base58
+import struct
+#TODO redo this with some library I just don't know which one we want to use https://github.com/hashberg-io/multiformats   or https://github.com/PancakesArchitect/py-multiformats-cid      have not been touched for a while but i guess its a simple algo that doesn't need to be touched 
+def cid_sha256_from_file(file_path: str) -> str:
+    print("hello3")
+    try:
+        # Read file in binary mode
+        with open(file_path, 'rb') as f:
+            file_data = f.read()
+
+        # Compute SHA2-256 hash of raw data
+        h = hashlib.sha256(file_data).digest()
+        print(f"SHA256 raw digest: {h.hex()}")
+        
+        # Construct the multihash
+        # 0x12 = sha2-256 identifier
+        # 0x20 = length (32 bytes) of sha2-256 hash
+        multihash = bytes([0x12, 0x20]) + h
+        
+        # CIDv0 (base58btc)
+        cidv0 = base58.b58encode(multihash).decode('utf-8')
+        
+        # CIDv1 with raw codec (base32)
+        # 0x01 = CID version 1
+        # 0x55 = raw binary codec
+        cidv1_bytes = bytes([0x01, 0x55]) + multihash
+        cidv1_base32 = 'b' + base64.b32encode(cidv1_bytes).decode('utf-8').lower()
+        
+
+        return   cidv1_base32
+        
+    except Exception as e:
+        raise Exception(f"Failed to compute CID: {str(e)}")
+    
+def cid_sha256_from_str(x: str) -> str:
+    print("hello4")
+    try:
+
+        h = hashlib.sha256(x.encode()).digest()
+        print(f"SHA256 raw digest: {h.hex()}")
+        
+        # Construct the multihash
+        # 0x12 = sha2-256 identifier
+        # 0x20 = length (32 bytes) of sha2-256 hash
+        multihash = bytes([0x12, 0x20]) + h
+        
+        # CIDv0 (base58btc)
+        cidv0 = base58.b58encode(multihash).decode('utf-8')
+        
+        # CIDv1 with raw codec (base32)
+        # 0x01 = CID version 1
+        # 0x55 = raw binary codec
+        cidv1_bytes = bytes([0x01, 0x55]) + multihash
+        cidv1_base32 = 'b' + base64.b32encode(cidv1_bytes).decode('utf-8').lower()
+        
+
+        return   cidv1_base32
+        
+    except Exception as e:
+        raise Exception(f"Failed to compute CID: {str(e)}")
+ 
+
 def path2objectpath(path:str, **kwargs) -> str:
     path = os.path.abspath(path)
     for dir_prefix in dir_prefixes:
