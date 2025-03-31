@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 import time
@@ -100,7 +99,7 @@ class deval:
             'provider': self.provider_name
         }
         data.update(extra_data)
-        data['hash'] = sha256(data)
+        data['hash'] = cid_sha256_from_str(data)
         data['token'] = self.auth.get_token(data['hash'], key=self.key)
         assert self.auth.verify_token(data['token']), 'Failed to verify token'
         self.storage.put(f"{data['model']}/{data['time']}.json", data)
