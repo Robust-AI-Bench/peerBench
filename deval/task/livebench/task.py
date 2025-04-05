@@ -10,11 +10,11 @@ class AddTask:
     temperature = 0
     max_tokens = 10000
 
-    def get_sample(self ):
+    def sample(self ):
         return {'a': random.randint(1, 100), 'b': random.randint(1, 100)}
 
     def forward(self, model):
-        sample = self.get_sample()
+        sample = self.sample()
         a = sample['a']
         b = sample['b']
         message =  {'input': sample, 

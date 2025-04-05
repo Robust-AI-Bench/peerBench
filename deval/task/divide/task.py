@@ -10,8 +10,6 @@ class AddTask:
     temperature = 0
     max_tokens = 10000
 
-
-
     def sample(self , idx:int = None):
         # generate two random numbers from the id seed
         idx = idx or random.randint(1, 100)
@@ -24,6 +22,8 @@ class AddTask:
     def forward(self, model, sample=None):
         sample = sample or self.sample()
         sample = self.sample()
+        a = sample['a']
+        b = sample['b']
         message =  {'input': sample, 
                  'goals': [
                     f'return a json object with the sum of {a} and {b}',
@@ -35,7 +35,7 @@ class AddTask:
         target = a + b
         y =  model(**params)
         data = {
-            'id': id,
+            'idx': sample['idx'],
             'params': params,
             'result': y,
             'target': target,

@@ -112,7 +112,6 @@ class Storage:
     def abspath(self, path):
         return os.path.abspath(os.path.expanduser(path))
 
-
     def path2age(self):
         """
         returns the age of the item in seconds

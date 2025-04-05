@@ -15,7 +15,7 @@ class deval:
     def __init__(self,
                     search : Optional[str] =  None, # (OPTIONAL) the search string for the network 
                     batch_size : int = 64, # the batch size of the most parallel tasks
-                    task : str= 'livebench', # score function
+                    task : str= 'divide', # score function
                     key : str = None, # the key for the model
                     tempo : int = 3000, # the time between epochs
                     provider = 'providers.openrouter',
@@ -45,6 +45,27 @@ class deval:
         self.models = self.models[:n]
         if background:
             thread(self.background) if background else ''
+
+    def forward(self,  model:dict, sample=None, task=None, **kwargs):
+        t0 = time.time() # the timestamp
+        print(f'Scoring({model}, task={self.task.task_name})')
+        model_fn = lambda **kwargs : self.provider.forward(model=model, sample=sample,  **kwargs)
+        data = self.task.forward(model_fn)
+        extra_data = {
+            'model': model,
+            'time': t0,
+            'duration': time.time() - t0,
+            'vali': self.key.key_address,
+            'task_id': self.task.task_id,
+            'provider': self.provider_name
+        }
+        data.update(extra_data)
+        data['hash'] = sha256(data)
+        data['token'] = self.auth.get_token(data['hash'], key=self.key)
+
+        assert self.auth.verify_token(data['token']), 'Failed to verify token'
+        self.storage.put(f"{data['model']}/{data['time']}.json", data)
+        return data
 
     def set_provider(self, provider):
         self.provider = self.module(provider)()
@@ -85,35 +106,34 @@ class deval:
                 print('XXXXXXXXXX EPOCH ERROR ----> XXXXXXXXXX {e}')
         raise Exception('Background process has stopped')
 
+    def aggregate(self, results, **kwargs):
 
-    def score_model(self,  model:dict, task=None, **kwargs):
-        t0 = time.time() # the timestamp
-        print(f'Scoring({model}, task={self.task.task_name})')
-        model_fn = lambda **kwargs : self.provider.forward(model=model,  **kwargs)
-        data = self.task.forward(model_fn)
-        extra_data = {
-            'model': model,
-            'time': t0,
-            'duration': time.time() - t0,
-            'vali': self.key.key_address,
-            'task_id': self.task.task_id,
-            'provider': self.provider_name
-        }
-        data.update(extra_data)
-        data['hash'] = sha256(data)
-        data['token'] = self.auth.get_token(data['hash'], key=self.key)
-        assert self.auth.verify_token(data['token']), 'Failed to verify token'
-        self.storage.put(f"{data['model']}/{data['time']}.json", data)
-        return data
-
-    #TODO: implement the aggregate score function to aggregate the scores of the models
-    def aggregate_score(self, task=None, **kwargs):
-        raise NotImplementedError('Aggregate score not implemented yet')
-
-    def results(self, **kwargs):
+        """
+        DEFAULT AGGREGATE FUNCTION
+        This function aggregates the results of the task into a dataframe
+        and returns the top n results
+        """
         results =  df(self.storage.items())[self.task.show_features]
+
         results = results.sort_values(by=self.task.sort_by, ascending=self.task.sort_by_asc )
+        # aggregate by model
+        results = results.groupby('model').agg(lambda x: x.tolist()).reset_index()
+        results =  results[['model', 'score', 'duration']]
+        
+        results = results.sort_values(by='score', ascending=False)
+        results['n'] = results['score'].apply(lambda x: len(x))
+        results['score'] = results['score'].apply(lambda x: sum(x)/len(x))
+        results['duration'] = results['duration'].apply(lambda x: sum(x)/len(x))
+
+        results = results.sort_values(by='score', ascending=False)
+        results = results.reset_index(drop=True)
+        results['rank'] = results.index + 1
         return results
+
+    # TODO: UPLOAD THE AGGREGATE FUNCTION TO SERVER
+    def results(self, **kwargs):
+        aggfn = self.task.aggregate if hasattr(self.task, 'aggregate') else self.aggregate
+        return aggfn(self.storage.items(), **kwargs)
 
     def _rm_all(self):
         return self.storage._rm_all()
@@ -121,10 +141,18 @@ class deval:
     def tasks(self):
         return [t.split('task.')[-1] for t in  modules(search='task')]
 
+    def sample(self):
+        """
+        Get the sample from the task
+        """
+        if hasattr(self.task, 'sample'):
+            return self.task.sample()
+        else:
+            return None
+
     def epoch(self, task=None,  **kwargs):
         if task != None:
             self.set_task(task)
-
         from concurrent.futures import ThreadPoolExecutor
         threadpool = ThreadPoolExecutor(max_workers=128)
         n = len(self.models)
@@ -134,9 +162,10 @@ class deval:
         results_count = 0
         for i, model_batch in enumerate(batched_models):
             print(f'Batch {i+1}/{num_batches} ({len(model_batch)})')
+            sample = self.sample()
             futures = []
-            for m in model_batch:
-                future = threadpool.submit(self.score_model, m)
+            for model in model_batch:
+                future = threadpool.submit(self.forward, model=model, sample=sample)
                 futures.append(future)
             try:
                 for f in tqdm.tqdm(as_completed(futures), total=len(futures), desc='Scoring models'):
@@ -203,8 +232,6 @@ class deval:
                 return fn(*args, **kwargs)
             globals_input[f] = partial(wrapper_fn, f)
 
-    def forward(self, model='microsoft/wizardlm-2-7b'):
-        return self.score_model(model)
 
     @classmethod
     def init(cls, **kwargs):
@@ -246,7 +273,6 @@ class deval:
         output = fn_obj(*args, **kwargs) if callable(fn_obj) else fn_obj
         duration = time.time() - t0
         print(output)
-
 
     def test(self, modules = ['key', 'auth']):
         """
