@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 import time
@@ -108,11 +107,39 @@ class deval:
 
     def aggregate(self, results, **kwargs):
 
+<<<<<<< HEAD
         """
         DEFAULT AGGREGATE FUNCTION
         This function aggregates the results of the task into a dataframe
         and returns the top n results
         """
+=======
+    def score_model(self,  model:dict, task=None, **kwargs):
+        t0 = time.time() # the timestamp
+        print(f'Scoring({model}, task={self.task.task_name})')
+        model_fn = lambda **kwargs : self.provider.forward(model=model,  **kwargs)
+        data = self.task.forward(model_fn)
+        extra_data = {
+            'model': model,
+            'time': t0,
+            'duration': time.time() - t0,
+            'vali': self.key.key_address,
+            'task_id': self.task.task_id,
+            'provider': self.provider_name
+        }
+        data.update(extra_data)
+        data['hash'] = cid_sha256_from_str(data)
+        data['token'] = self.auth.get_token(data['hash'], key=self.key)
+        assert self.auth.verify_token(data['token']), 'Failed to verify token'
+        self.storage.put(f"{data['model']}/{data['time']}.json", data)
+        return data
+
+    #TODO: implement the aggregate score function to aggregate the scores of the models
+    def aggregate_score(self, task=None, **kwargs):
+        raise NotImplementedError('Aggregate score not implemented yet')
+
+    def  results(self, **kwargs):
+>>>>>>> 28e795f5e9df2ade2174dd43b641095e52c79385
         results =  df(self.storage.items())[self.task.show_features]
 
         results = results.sort_values(by=self.task.sort_by, ascending=self.task.sort_by_asc )
