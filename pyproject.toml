@@ -1,15 +1,15 @@
 [tool.poetry]
-name = "deval"
+name = "val"
 version = "0.0.1"
 description = "Decentralized Evaluation Framework"
-authors = ["deval ai organization <contact@devalai.org>"]
+authors = ["val ai organization <contact@valai.org>"]
 license = "MIT"
 readme = "README.md"
 packages = [
-    { include = "deval" }
+    { include = "val" }
 ]
-repository = "https://github.com/deval-ai/deval"
-homepage = "https://devalai.org/"
+repository = "https://github.com/val-ai/val"
+homepage = "https://valai.org/"
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -62,10 +62,10 @@ isort = "^5.13.2"
 pytest-cov = "^4.1.0"
 
 [tool.poetry.scripts]
-d = "deval.deval:main"
+v = "val.val:main"
 
 [tool.mypy]
-files = ["deval"]
+files = ["val"]
 
 [tool.isort]
 profile = "black"

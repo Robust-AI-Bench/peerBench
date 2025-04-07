@@ -12,7 +12,7 @@ class OpenRouter:
         base_url: str = 'https://openrouter.ai/api/v1',
         timeout: float = None,
         max_retries: int = 10,
-        storage_path = '~/.deval/model/openrouter',
+        storage_path = '~/.val/model/openrouter',
         **kwargs
     ):
         """
@@ -24,7 +24,7 @@ class OpenRouter:
             base_url (str, optional): can be used for openrouter api calls
             timeout (float, optional): The timeout value for the client. Defaults to None.
             max_retries (int, optional): The maximum number of retries for the client. Defaults to None.
-            storage_path (str, optional): The path to store the models. Defaults to '~/.deval/model/openrouter'.
+            storage_path (str, optional): The path to store the models. Defaults to '~/.val/model/openrouter'.
         """
         # Load environment variables from .env file in the current working directory
 
@@ -196,7 +196,7 @@ class OpenRouter:
         path =  f'{self.storage_path}/models.json'
         models = self.get_json(path, default={}, update=update)
         if len(models) == 0:
-            response = requests.get_json(self.base_url + '/models')
+            response = requests.get(self.base_url + '/models')
             models = json.loads(response.text)['data']
             self.put_json(path, models)
         models = self.filter_models(models, search=search)

@@ -3,7 +3,7 @@ import hmac
 import json
 import time
 from typing import Dict, Optional, Any
-import deval as d
+import val as v
 
 class Auth:
 
@@ -17,7 +17,7 @@ class Auth:
             JWT token string
         """
         if isinstance(key, str) or key == None:
-            key = d.get_key(key, crypto_type=crypto_type)
+            key = v.get_key(key, crypto_type=crypto_type)
         else:
             key = key
         if not isinstance(data, dict):
@@ -76,7 +76,7 @@ class Auth:
         # Verify signature
         message = f"{header_encoded}.{data_encoded}"
         signature = self._base64url_decode(signature_encoded)
-        assert d.verify(data=message, signature=signature, address=data['iss'], crypto_type=headers['alg']), "Invalid token signature"
+        assert v.verify(data=message, signature=signature, address=data['iss'], crypto_type=headers['alg']), "Invalid token signature"
         # data['data'] = message
         data['time'] = data['iat'] # set time field for semanitcally easy people
         data['signature'] = '0x'+signature.hex()

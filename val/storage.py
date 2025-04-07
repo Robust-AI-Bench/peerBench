@@ -6,7 +6,7 @@ from .utils import get_text, sha256
 
 class Storage:
 
-    def __init__(self, storage_dirpath='~/.deval', mode='json'):
+    def __init__(self, storage_dirpath='~/.val', mode='json'):
         self.storage_dirpath = self.abspath(storage_dirpath)
         self.mode = mode
 
@@ -125,7 +125,7 @@ class Storage:
 
     def cid(self, path, ignore_names=['__pycache__', '.DS_Store','.git', '.gitignore']):
         """
-        Get the CID of the deval module
+        Get the CID of the val module
         """
         path = self.abspath(path)
         if os.path.isdir(path):

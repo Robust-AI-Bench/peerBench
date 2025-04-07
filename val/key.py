@@ -37,7 +37,7 @@ class Key:
                  path : Optional[str] = None,
                 ss58_format = 42,
                 language_code = 'en',
-                storage_path = '~/.deval/key',
+                storage_path = '~/.val/key',
                  **kwargs): 
         self.ss58_format = ss58_format
         self.crypto_type = crypto_type

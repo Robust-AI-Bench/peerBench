@@ -57,7 +57,7 @@ SCRYPT_R = 8
 
 
 # path stuff
-storage_path = os.path.expanduser('~/.deval')
+storage_path = os.path.expanduser('~/.val')
 lib_path = os.path.dirname(os.path.abspath(__file__))
 home_path = os.path.expanduser('~')
 pwd = os.getcwd()

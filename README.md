@@ -1,7 +1,14 @@
-import deval as d
+# val: Decentralized Evaluation Framework
+
+val is a powerful framework for evaluating and benchmarking AI models across different providers in a decentralized manner. It provides a simple, flexible interface for testing model performance on various tasks with cryptographic verification.
+
+## Quick Start
+
+```python
+import val as v
 
 # Initialize the evaluator
-val = d.Deval(
+val = v.Val(
     task='add',          # Task to evaluate (e.g., 'add', 'divide')
     provider='openrouter', # Model provider
     n=4,                 # Number of models to test
@@ -13,11 +20,41 @@ results = val.epoch()
 print(results)
 ```
 
+## Installation
+
+### Using pip
+
+```bash
+pip install val
+```
+
+### Using Docker
+
+We provide a Docker environment for easy setup and isolation:
+
+```bash
+# Clone the repository
+git clone https://github.com/val-ai/val.git
+cd val
+
+# Build the Docker image
+make build
+
+# Start the container
+make start
+
+# Enter the container
+make enter
+
+# Run tests
+make test
+```
+
 ## Core Components
 
 ### Tasks
 
-Tasks define what you want to evaluate. Deval comes with several built-in tasks:
+Tasks define what you want to evaluate. val comes with several built-in tasks:
 
 ```python
 # List available tasks
@@ -37,7 +74,7 @@ Providers connect to different AI model APIs:
 val.set_provider('openrouter')
 
 # List available models from the provider
-models = evaluator.models()
+models = val.models()
 print(models)
 ```
 
@@ -47,10 +84,10 @@ Secure your evaluations with cryptographic authentication:
 
 ```python
 # Generate a new key
-key = Deval().get_key('my_key', crypto_type='ecdsa')
+key = v.get_key('my_key', crypto_type='ecdsa')
 
 # Create an authentication token
-auth = Deval().module('auth')()
+auth = v.module('auth')()
 token = auth.get_token({'data': 'test'}, key=key)
 
 # Verify a token
@@ -92,7 +129,7 @@ class CustomTask:
 Run evaluations in the background:
 
 ```python
-evaluator = Deval(
+evaluator = v.Val(
     task='add',
     background=True,  # Run in background
     tempo=60          # Run every 60 seconds
@@ -105,12 +142,12 @@ View and analyze evaluation results:
 
 ```python
 # Get aggregated results
-print( val.results())
+print(val.results())
 ```
 
 ## Command Line Interface
 
-Deval includes a CLI for common operations:
+val includes a CLI for common operations:
 
 ```bash
 # Run an evaluation epoch
@@ -123,14 +160,23 @@ d tasks
 d test
 ```
 
-## Security
+## Docker Environment
 
-Deval includes cryptographic functions for securing evaluations:
+The included Docker environment provides a complete setup for val:
 
-- ECDSA, ED25519, and SR25519 key types
-- JWT-like token authentication
-- Secure storage of keys and results
+```dockerfile
+# FROM ubuntu:22.04 base with Python, Docker, and other dependencies
+# See Dockerfile for details
 
-## License
+# Build the image
+docker build -t val .
 
-MIT%  
+# Run the container
+docker run -d \
+  --name val \
+  --network=host \
+  --restart unless-stopped \
+  --privileged --shm-size 4g \
+  -v $(pwd):/app \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  val

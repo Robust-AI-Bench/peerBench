@@ -12,7 +12,8 @@ import sys
 import random
 
 print = log
-class deval:
+class val:
+
 
     def __init__(self,
                     search : Optional[str] =  None, # (OPTIONAL) the search string for the network 
@@ -92,7 +93,7 @@ class deval:
         self.models = self.provider.models()
         return {'success': True, 'msg': 'Provider set', 'provider': provider}
 
-    def set_task(self, task: str, task_results_path='~/.deval/results', storage='deval.storage'):
+    def set_task(self, task: str, task_results_path='~/.val/results', storage='val.storage'):
 
         self.task = self.module('task.'+task)()
         self.task.name = task.lower()
@@ -221,10 +222,10 @@ class deval:
         return fns
 
     def util(self, util_name):
-        return self.module(f'deval.utils.{util_name}')
+        return self.module(f'val.utils.{util_name}')
 
     def get_key(self, key='fam', crypto_type='ecdsa'):
-        return self.module('deval.key')().get_key(key, crypto_type=crypto_type)
+        return self.module('val.key')().get_key(key, crypto_type=crypto_type)
 
     def add_key(self, key='fam', crypto_type='ecdsa'):
         return self.get_key().add_key(key, crypto_type=crypto_type)
@@ -244,15 +245,27 @@ class deval:
         add the functions and classes of the module to the global namespace
         """
         globals_input = globals_input or {}
-        for k,v in deval.__dict__.items():
+        for k,v in val.__dict__.items():
             globals_input[k] = v     
-        for f in dir(deval):
+        for f in dir(val):
             def wrapper_fn(f, *args, **kwargs):
-                fn = getattr(deval(), f)
+                fn = getattr(val(), f)
                 return fn(*args, **kwargs)
             globals_input[f] = partial(wrapper_fn, f)
 
 
+    def cid(self, data):
+        """
+        Get the cid of the data
+        """
+        if isinstance(data, str):
+            return self.hash(data)
+        elif isinstance(data, dict):
+            return self.hash(json.dumps(data))
+        elif isinstance(data, list):
+            return self.hash(json.dumps(data))
+        else:
+            raise Exception('Data type not supported')
 
     def cli(self, default_fn = 'forward') -> None:
         """
@@ -296,7 +309,7 @@ class deval:
 
     def test(self, modules = ['key', 'auth']):
         """
-        Test the deval module
+        Test the val module
         """
         for m in modules:
             print(f'Testing {m}')
@@ -313,9 +326,9 @@ class deval:
         for util in cls().utils():
             def wrapper_fn(util, *args, **kwargs):
                 import importlib
-                fn = obj(f'deval.utils.{util}')
+                fn = obj(f'val.utils.{util}')
                 return fn(*args, **kwargs)
-            setattr(deval, util, partial(wrapper_fn, util))
+            setattr(val, util, partial(wrapper_fn, util))
 
     def hash(self, data='hey', mode  = 'sha256', **kwargs):
         """
@@ -324,6 +337,6 @@ class deval:
         return get_hash(data, mode=mode, **kwargs)
 
 def main():
-    return deval().cli()
+    return val().cli()
 
 

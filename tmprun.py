@@ -1,7 +1,7 @@
-import deval as d
+import val as v
 
-# Initialize deval with default settings
-deval = d.deval(
+# Initialize val with default settings
+val = v.val(
     task='add',               # Task to evaluate
     provider='providers.openrouter',  # Model provider
     batch_size=16,            # Number of parallel evaluations
@@ -9,10 +9,10 @@ deval = d.deval(
 )
 
 # Run an evaluation epoch
-results = deval.epoch()
+results = val.epoch()
 
 
-all_results = deval.results()
+all_results = val.results()
 
 
 

@@ -1,4 +1,4 @@
-from deval.utils import  cid_sha256_from_file, cid_sha256_from_str
+from val.utils import  cid_sha256_from_file, cid_sha256_from_str
 
 testfname = "requirements.txt"
 with open(testfname, 'r') as file:

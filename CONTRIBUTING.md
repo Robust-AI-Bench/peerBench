@@ -1,6 +1,6 @@
-# Contributing to deval
+# Contributing to val
 
-We're excited that you're interested in contributing to deval! This guide will help you set up your development environment and understand our contribution workflow.
+We're excited that you're interested in contributing to val! This guide will help you set up your development environment and understand our contribution workflow.
 
 ## Table of Contents
 
@@ -24,8 +24,8 @@ We're excited that you're interested in contributing to deval! This guide will h
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/deval.git
-   cd deval
+   git clone https://github.com/your-org/val.git
+   cd val
    ```
 
 2. Set up your development environment:
@@ -49,22 +49,22 @@ We maintain strict code quality standards to ensure maintainability and consiste
 1. Code Formatting:
    ```bash
    # Format code using Black
-   poetry run black deval
+   poetry run black val
 
    # Sort imports
-   poetry run isort deval
+   poetry run isort val
    ```
 
 2. Type Checking:
    ```bash
    # Run type checker
-   poetry run mypy deval
+   poetry run mypy val
    ```
 
 3. Linting:
    ```bash
    # Run linter
-   poetry run flake8 deval
+   poetry run flake8 val
    ```
 
 ## Code Quality Standards
@@ -157,7 +157,7 @@ def process_data(data: List[str], config: Optional[dict] = None) -> bool:
 
 3. Check test coverage:
    ```bash
-   poetry run pytest --cov=deval
+   poetry run pytest --cov=val
    ```
 
 ## Documentation
@@ -188,11 +188,11 @@ When reporting issues, please include:
 
 ## License
 
-By contributing to deval, you agree that your contributions will be licensed under our project's MIT License.
+By contributing to val, you agree that your contributions will be licensed under our project's MIT License.
 
 ## Questions or Need Help?
 
-- Open a [GitHub Discussion](https://github.com/deval-ai/deval/discussions)
-- Join our [Discord Community](https://discord.gg/deval-ai-941362322000203776)
+- Open a [GitHub Discussion](https://github.com/val-ai/val/discussions)
+- Join our [Discord Community](https://discord.gg/val-ai-941362322000203776)
 
-Thank you for contributing to deval! 🚀
+Thank you for contributing to val! 🚀

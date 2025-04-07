@@ -1,12 +1,14 @@
 import os
 import json
+import duckdb
+import pandas as pd
 from pathlib import Path
-from deval.utils import storage_path
+from val.utils import storage_path
 
 def flatten_dict(d, parent_key='', sep='_'):
     """Flatten nested dictionary by concatenating keys with separator."""
     items = []
-    for k, v in d.items():
+    for k, v in v.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         if isinstance(v, dict):
             items.extend(flatten_dict(v, new_key, sep=sep).items())
@@ -63,12 +65,30 @@ def consolidate_responses():
     output_dir = storage_dir / 'consolidated'
     output_dir.mkdir(exist_ok=True)
     
-    # Save consolidated responses
-    output_file = output_dir / 'all_responses.json'
-    with open(output_file, 'w') as f:
+    # Save consolidated responses as JSON
+    output_file_json = output_dir / 'all_responses.json'
+    with open(output_file_json, 'w') as f:
         json.dump(all_responses, f, indent=2)
     
-    print(f"Consolidated {len(all_responses)} responses into {output_file}")
+    # Convert to DataFrame and save as parquet using duckdb
+    df = pd.DataFrame(all_responses)
+    output_file_parquet = output_dir / 'all_responses.parquet'
+    
+    # Create a DuckDB connection
+    con = duckdb.connect()
+    
+    # Register the DataFrame as a table
+    con.register('responses', df)
+    
+    # Save to parquet
+    con.execute(f"COPY responses TO '{output_file_parquet}' (FORMAT PARQUET)")
+    
+    # Close the connection
+    con.close()
+    
+    print(f"Consolidated {len(all_responses)} responses into:")
+    print(f"- JSON: {output_file_json}")
+    print(f"- Parquet: {output_file_parquet}")
 
 if __name__ == "__main__":
     consolidate_responses() 
