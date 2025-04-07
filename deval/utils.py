@@ -11,6 +11,7 @@ import re
 import base64
 from base64 import b64encode
 import hashlib
+import random
 from scalecodec.utils.ss58 import ss58_encode, ss58_decode, get_ss58_format, is_valid_ss58_address
 from scalecodec.base import ScaleBytes
 from bip39 import bip39_to_mini_secret, bip39_generate, bip39_validate
@@ -779,6 +780,9 @@ def resolve_console( console = None, **kwargs):
 
 
 
+def random_color():
+    colors = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white']
+    return random.choice(colors)
 
 def log( *text:str, 
             color:str=None, 
@@ -936,3 +940,27 @@ def thread(fn: Union['callable', str],
     return t
 
 
+def get_hash( data='hey', mode  = 'sha256', add_prefix=False, add_suffix=True,  **kwargs) -> str:
+    """
+    Hash the data
+    Args:
+        data: the data to hash
+        mode: the hash mode to use
+        add_prefix: add the prefix to the hash
+        kwargs: additional arguments to pass to the hash function
+    """
+    if not isinstance(data, bytes):
+        data = str(data).encode()
+    optiopns = ['sha256', 'sha512', 'md5', 'sha1', 'sha3_256', 'sha3_512', 'blake2b']
+    assert mode in optiopns, f'Invalid hash mode {mode}, options are {optiopns}'
+    if hasattr(hashlib, mode):
+        result = getattr(hashlib, mode)(data, **kwargs)
+    else: 
+        raise Exception(f'Hash mode {mode} not found')
+    if hasattr(result, 'hexdigest'):    
+        result = result.hexdigest()
+    if add_prefix: 
+        result = mode + ':' + result
+    if add_suffix:
+        result = result + ':' + mode
+    return result

@@ -6,23 +6,27 @@ from .utils import *
 from typing import *
 import inspect
 import tqdm
+import hashlib
 from functools import partial
 import sys
+import random
 
+print = log
 class deval:
 
     def __init__(self,
                     search : Optional[str] =  None, # (OPTIONAL) the search string for the network 
                     batch_size : int = 64, # the batch size of the most parallel tasks
-                    task : str= 'divide', # score function
+                    task : str= 'task', # score function
                     key : str = None, # the key for the model
                     tempo : int = 3000, # the time between epochs
-                    provider = 'providers.openrouter',
+                    provider = 'openrouter',
                     crypto_type='ecdsa',
                     auth = 'auth',
                     storage = 'storage',
+                    samples_per_epoch = 4, # the number of samples per epoch
                     models = None, # the models to test
-                    n : int = 64, # the number of models to test
+                    n : int = 8, # the number of models to test
                     max_sample_age : int = 3600, # the maximum age of the samples
                     timeout : int = 4, # timeout per evaluation of the model
                     update : bool =True, # update during the first epoch
@@ -30,10 +34,10 @@ class deval:
                     verbose: bool = False, # print verbose output
                     path : str= None, # the storage path for the model eval, if not null then the model eval is stored in this directory
                  **kwargs):  
-        self.epochs = 0 # the number of epochs
         self.epoch_time = 0
         self.timeout = timeout
-        self.batch_size = batch_size
+        self.batch_size = min(batch_size, n)
+        self.samples_per_epoch = samples_per_epoch
         self.verbose = verbose
         self.key = self.get_key(key, crypto_type=crypto_type)
         self.tempo = tempo
@@ -45,30 +49,41 @@ class deval:
         if background:
             thread(self.background) if background else ''
 
-    def forward(self,  model:dict, sample=None, task=None, **kwargs):
-        t0 = time.time() # the timestamp
-        print(f'Scoring({model}, task={self.task.task_name})')
+
+    def eval(self,  model:dict = None, sample=None, idx=None, **kwargs):
+        start_time = time.time() # the timestamp
+        # resolve the model
+        if model is None:
+            model = self.models[0]
+        sample = self.task.sample(sample=sample, idx=idx)
+        # run the task over the model function
         model_fn = lambda **kwargs : self.provider.forward(model=model, sample=sample,  **kwargs)
         data = self.task.forward(model_fn)
-        extra_data = {
-            'model': model,
-            'time': t0,
-            'duration': time.time() - t0,
-            'vali': self.key.key_address,
-            'task_id': self.task.task_id,
-            'provider': self.provider_name
-        }
-        data.update(extra_data)
-        data['hash'] = sha256(data)
-        data['token'] = self.auth.get_token(data['hash'], key=self.key)
+        # add the model and sample to the data
+        data['model'] = model
+        data['sample'] = sample
+        data['task_cid'] = self.task.cid
+        data['sample_cid'] = self.hash(sample)
+        data['score'] = data['score'] if 'score' in data else 0
+        data['provider'] = self.provider_name
+        data['validator'] = self.key.address
+        data['time_start'] = start_time
+        data['time_end'] = time.time()
 
+        # generate token over sorted keys (sorted to avoid non-collisions due to key order)
+        data = {k: data[k] for k in sorted(data.keys())}
+
+        # verify the token
+        data['token'] = self.auth.get_token(self.hash(data), key=self.key)
+
+        # verify the token
         assert self.auth.verify_token(data['token']), 'Failed to verify token'
-        self.storage.put(f"{data['model']}/{data['time']}.json", data)
+        self.storage.put(f"{data['model']}/{data['sample_cid']}.json", data)
         return data
 
     def set_provider(self, provider):
         self.provider = self.module(provider)()
-        provider_prefix = 'deval.providers.'
+        provider_prefix = 'providers.'
         if provider.startswith(provider_prefix):
             provider_name = provider[len(provider_prefix):]
         else:
@@ -78,12 +93,13 @@ class deval:
         return {'success': True, 'msg': 'Provider set', 'provider': provider}
 
     def set_task(self, task: str, task_results_path='~/.deval/results', storage='deval.storage'):
+
         self.task = self.module('task.'+task)()
-        self.task.task_name = task.lower()
+        self.task.name = task.lower()
         assert callable(self.task.forward), f'No task function in task {task}'
-        self.task.task_id = sha256(inspect.getsource(self.task.forward))
-        self.storage = self.module(storage)(f'{task_results_path}/{self.task.task_name}')
-        return {'success': True, 'msg': 'Task set', 'task': task, 'task_id': self.task.task_id, }
+        self.storage = self.module(storage)(f'{task_results_path}/{self.task.name}')
+        self.task.cid = self.hash(inspect.getsource(self.task.__class__))
+        return {'success': True, 'msg': 'Task set', 'task': task, 'cid': self.task.cid }
 
     def wait_for_epoch(self):
         while True:
@@ -107,50 +123,21 @@ class deval:
 
     def aggregate(self, results, **kwargs):
 
-<<<<<<< HEAD
         """
         DEFAULT AGGREGATE FUNCTION
         This function aggregates the results of the task into a dataframe
         and returns the top n results
         """
-=======
-    def score_model(self,  model:dict, task=None, **kwargs):
-        t0 = time.time() # the timestamp
-        print(f'Scoring({model}, task={self.task.task_name})')
-        model_fn = lambda **kwargs : self.provider.forward(model=model,  **kwargs)
-        data = self.task.forward(model_fn)
-        extra_data = {
-            'model': model,
-            'time': t0,
-            'duration': time.time() - t0,
-            'vali': self.key.key_address,
-            'task_id': self.task.task_id,
-            'provider': self.provider_name
-        }
-        data.update(extra_data)
-        data['hash'] = cid_sha256_from_str(data)
-        data['token'] = self.auth.get_token(data['hash'], key=self.key)
-        assert self.auth.verify_token(data['token']), 'Failed to verify token'
-        self.storage.put(f"{data['model']}/{data['time']}.json", data)
-        return data
-
-    #TODO: implement the aggregate score function to aggregate the scores of the models
-    def aggregate_score(self, task=None, **kwargs):
-        raise NotImplementedError('Aggregate score not implemented yet')
-
-    def  results(self, **kwargs):
->>>>>>> 28e795f5e9df2ade2174dd43b641095e52c79385
-        results =  df(self.storage.items())[self.task.show_features]
+        results =  df(self.storage.items())
 
         results = results.sort_values(by=self.task.sort_by, ascending=self.task.sort_by_asc )
         # aggregate by model
         results = results.groupby('model').agg(lambda x: x.tolist()).reset_index()
-        results =  results[['model', 'score', 'duration']]
+        results =  results[['model', 'score']]
         
         results = results.sort_values(by='score', ascending=False)
         results['n'] = results['score'].apply(lambda x: len(x))
         results['score'] = results['score'].apply(lambda x: sum(x)/len(x))
-        results['duration'] = results['duration'].apply(lambda x: sum(x)/len(x))
 
         results = results.sort_values(by='score', ascending=False)
         results = results.reset_index(drop=True)
@@ -158,25 +145,24 @@ class deval:
         return results
 
     # TODO: UPLOAD THE AGGREGATE FUNCTION TO SERVER
-    def results(self, **kwargs):
+    def results(self, data=None, **kwargs):
         aggfn = self.task.aggregate if hasattr(self.task, 'aggregate') else self.aggregate
-        return aggfn(self.storage.items(), **kwargs)
+        data = data or self.storage.items()
+        if len(items) == 0:
+            return df([])
+        return df(data)
 
-    def _rm_all(self):
+    def _rm_all_storage(self):
         return self.storage._rm_all()
 
     def tasks(self):
         return [t.split('task.')[-1] for t in  modules(search='task')]
 
-    def sample(self):
+    def sample(self, idx:int=None):
         """
         Get the sample from the task
         """
-        if hasattr(self.task, 'sample'):
-            return self.task.sample()
-        else:
-            return None
-
+        return self.task.sample(idx=idx)
     def epoch(self, task=None,  **kwargs):
         if task != None:
             self.set_task(task)
@@ -187,34 +173,41 @@ class deval:
         num_batches = len(batched_models)
         results = []
         results_count = 0
-        for i, model_batch in enumerate(batched_models):
-            print(f'Batch {i+1}/{num_batches} ({len(model_batch)})')
-            sample = self.sample()
-            futures = []
-            for model in model_batch:
-                future = threadpool.submit(self.forward, model=model, sample=sample)
-                futures.append(future)
-            try:
-                for f in tqdm.tqdm(as_completed(futures), total=len(futures), desc='Scoring models'):
-                    try:
-                        r = f.result()
-                        if isinstance(r, dict) and 'score' in r:
-                            results.append(r)
-                            print({'score': r['score'], 'model': r['model']})
-                        else:
-                            print('Invalid result', r) if self.verbose else ''
-                    except Exception as e:
-                        print('Error', e)
-            except TimeoutError as e:
-                print('Timeout Error', e)
 
-        self.epochs += 1
+        for sample_idx in range(self.samples_per_epoch):
+            sample = self.sample()
+            for batch_idx, model_batch in enumerate(batched_models):
+                futures = []
+                sample_cid = self.hash(sample)
+                # random color for the sample
+                sample_color = random_color()
+                # sending the sample to the server
+                print(f'Batch({batch_idx}/{num_batches}, batch_size={self.batch_size})', color=sample_color)
+                print(f'Sample({sample_idx}/{self.samples_per_epoch} cid={sample_cid})', color=sample_color)
+                abrev_sample_cid = sample_cid[:8] + '..'
+                for model in model_batch:
+                    print(f'Sample({abrev_sample_cid}) --> Model({model}))', color=sample_color)
+                    future = threadpool.submit(self.eval, model=model, sample=sample)
+                    futures.append(future)
+                try:
+                    for f in as_completed(futures):
+                        try:
+                            r = f.result()
+                            if isinstance(r, dict) and 'score' in r:
+                                results.append(r)
+                                print( f"Result(model={r['model']} score={r['score']} sample={abrev_sample_cid})", color=sample_color)
+                        except Exception as e:
+                            if self.verbose:
+                                print(f'BatchError({e})')
+                except TimeoutError as e:
+                    print(f'TimeoutError({e})')
+
         self.epoch_time = time.time()
         if len(results) == 0:
             return {'success': False, 'msg': 'No results to vote on'}
-        results =  df(results)[self.task.show_features]
+        results =  df(results)
         results = results.sort_values(by=self.task.sort_by, ascending=False)
-        return results
+        return results[['model', 'provider', 'score', 'sample_cid']].reset_index(drop=True)
 
     def module(self, module_name):
         return module(module_name)
@@ -260,16 +253,8 @@ class deval:
             globals_input[f] = partial(wrapper_fn, f)
 
 
-    @classmethod
-    def init(cls, **kwargs):
-        for util in cls().utils():
-            def wrapper_fn(util, *args, **kwargs):
-                import importlib
-                fn = obj(f'deval.utils.{util}')
-                return fn(*args, **kwargs)
-            setattr(deval, util, partial(wrapper_fn, util))
 
-    def cli(self) -> None:
+    def cli(self, default_fn = 'forward') -> None:
         """
         Run the command line interface
         """
@@ -277,9 +262,10 @@ class deval:
         argv = sys.argv[1:]
         fn = argv.pop(0)
         if '/' in fn:
-            module_obj = module('/'.join(fn.split('/')[:-1]).replace('/', '.'))()
+            module_path = '/'.join(fn.split('/')[:-1]).replace('/', '.')
+            module_obj = module(module_path)()
             if fn.endswith('/'):
-                fn = 'forward'
+                fn = default_fn
             fn = fn.split('/')[-1]
 
         else:
@@ -296,8 +282,15 @@ class deval:
             else:
                 assert parsing_kwargs is False, 'Cannot mix positional and keyword arguments'
                 args.append(str2python(arg))
-        print(f'Running(fn={module}/{fn} args={args} kwargs={kwargs})')
-        output = fn_obj(*args, **kwargs) if callable(fn_obj) else fn_obj
+        module_name = module_obj.__class__.__name__.lower()
+        if len(args)> 0:
+            kwargs_from_args = {k: v for k, v in zip(inspect.getfullargspec(fn_obj).args[1:], args)}
+            params  = {**kwargs, **kwargs_from_args}
+        else:
+            params = kwargs
+        # remove the self and kwargs from the params
+        print(f'Running(fn={module_name}/{fn} params={params})')
+        output = fn_obj(**params) if callable(fn_obj) else fn_obj
         duration = time.time() - t0
         print(output)
 
@@ -311,6 +304,26 @@ class deval:
             obj.test()
         return {'success': True, 'msg': 'All tests passed'}
 
+
+    @classmethod
+    def init(cls, globals_dict=None, **kwargs):
+        if globals_dict != None:
+            cls.add_globals(globals_dict)
+        
+        for util in cls().utils():
+            def wrapper_fn(util, *args, **kwargs):
+                import importlib
+                fn = obj(f'deval.utils.{util}')
+                return fn(*args, **kwargs)
+            setattr(deval, util, partial(wrapper_fn, util))
+
+    def hash(self, data='hey', mode  = 'sha256', **kwargs):
+        """
+        Hash the data
+        """
+        return get_hash(data, mode=mode, **kwargs)
+
 def main():
     return deval().cli()
-deval.init()
+
+

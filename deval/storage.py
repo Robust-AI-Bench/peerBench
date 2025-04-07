@@ -2,6 +2,7 @@
 import json
 import os
 import time
+from .utils import get_text, sha256
 
 class Storage:
 
@@ -121,3 +122,25 @@ class Storage:
         for p in paths:
             ages[p] = time.time() - os.path.getmtime(p)
         return ages
+
+    def cid(self, path, ignore_names=['__pycache__', '.DS_Store','.git', '.gitignore']):
+        """
+        Get the CID of the deval module
+        """
+        path = self.abspath(path)
+        if os.path.isdir(path):
+            files = os.listdir(path)
+            content = []
+            for f in files:
+                if any([ignore in f for ignore in ignore_names]):
+                    continue
+                f = path + '/' + f
+                content.append(self.cid(f))
+            content = ''.join(content)
+        elif os.path.isfile(path):
+            content =  get_text(path)
+        else: 
+            raise Exception(f'Failed to find path {path}')
+        cid =  sha256(content)
+        print(f'cid={cid} path={path}')
+        return cid
