@@ -1,4 +1,4 @@
-SCRIPTS_PATH=./run
+SCRIPTS_PATH=./scripts/docker
 build:
 	${SCRIPTS_PATH}/build.sh 
 start:
@@ -9,13 +9,6 @@ enter:
 	${SCRIPTS_PATH}/enter.sh
 test:
 	${SCRIPTS_PATH}/test.sh
-freshtest:
-	make build && make test
-install:
-	${SCRIPTS_PATH}/install.sh	
-restart:
-	make stop
-	make start
 chmod:
 	chmod +x ${SCRIPTS_PATH}/*
 up: 

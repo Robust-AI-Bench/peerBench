@@ -1,182 +1,43 @@
-# val: Decentralized Evaluation Framework
+ # start of file
+# Key Management Module
 
-val is a powerful framework for evaluating and benchmarking AI models across different providers in a decentralized manner. It provides a simple, flexible interface for testing model performance on various tasks with cryptographic verification.
+This module provides cryptographic key management functionality for various blockchain systems.
 
-## Quick Start
+## Features
 
-```python
-import val as v
+- Support for multiple cryptographic types (sr25519, ed25519, ecdsa)
+- Key generation, storage, and retrieval
+- Signing and verification of messages
+- JWT token generation and verification
+- Mnemonic phrase support
+- Secure key storage
 
-# Initialize the evaluator
-val = v.Val(
-    task='add',          # Task to evaluate (e.g., 'add', 'divide')
-    provider='openrouter', # Model provider
-    n=4,                 # Number of models to test
-    samples_per_epoch=2  # Samples per evaluation epoch
-)
-
-# Run an evaluation epoch
-results = val.epoch()
-print(results)
-```
-
-## Installation
-
-### Using pip
-
-```bash
-pip install val
-```
-
-### Using Docker
-
-We provide a Docker environment for easy setup and isolation:
-
-```bash
-# Clone the repository
-git clone https://github.com/val-ai/val.git
-cd val
-
-# Build the Docker image
-make build
-
-# Start the container
-make start
-
-# Enter the container
-make enter
-
-# Run tests
-make test
-```
-
-## Core Components
-
-### Tasks
-
-Tasks define what you want to evaluate. val comes with several built-in tasks:
+## Usage
 
 ```python
-# List available tasks
-tasks = val.tasks()
-print(tasks)  # ['add', 'divide', ...]
+from val.key import Key
 
-# Set a specific task
-val.set_task('add')
+# Create a new key
+key = Key()
+
+# Sign a message
+signature = key.sign("Hello, world!")
+
+# Verify a signature
+is_valid = key.verify("Hello, world!", signature, key.public_key)
+
+# Generate a JWT token
+token = key.get_token({"user_id": 123})
+
+# Verify a JWT token
+token_data = key.verify_token(token)
 ```
 
-### Providers
+## Utils
 
-Providers connect to different AI model APIs:
+The module includes a utility library for common cryptographic operations:
 
-```python
-# Set a provider
-val.set_provider('openrouter')
-
-# List available models from the provider
-models = val.models()
-print(models)
-```
-
-### Authentication
-
-Secure your evaluations with cryptographic authentication:
-
-```python
-# Generate a new key
-key = v.get_key('my_key', crypto_type='ecdsa')
-
-# Create an authentication token
-auth = v.module('auth')()
-token = auth.get_token({'data': 'test'}, key=key)
-
-# Verify a token
-verified_data = auth.verify_token(token)
-```
-
-## Advanced Usage
-
-### Custom Tasks
-
-Create custom evaluation tasks by extending the base Task class:
-
-```python
-# Define a custom task in task/custom/task.py
-class CustomTask:
-    features = ['params', 'result', 'target', 'score', 'model', 'provider', 'token']
-    sort_by = ['score']
-    sort_by_asc = [False]
-    description = 'My custom evaluation task'
-    
-    def sample(self, idx=None, sample=None):
-        # Generate or return a sample
-        return {'message': {'prompt': 'Your test prompt'}}
-    
-    def forward(self, model, sample=None, idx=None):
-        # Run the model on the sample
-        sample = self.sample(idx=idx, sample=sample)
-        result = model(**sample)
-        return self.score({'sample': sample, 'result': result})
-    
-    def score(self, data):
-        # Score the model's response
-        data['score'] = 1.0  # Your scoring logic here
-        return data
-```
-
-### Background Evaluation
-
-Run evaluations in the background:
-
-```python
-evaluator = v.Val(
-    task='add',
-    background=True,  # Run in background
-    tempo=60          # Run every 60 seconds
-)
-```
-
-### Aggregating Results
-
-View and analyze evaluation results:
-
-```python
-# Get aggregated results
-print(val.results())
-```
-
-## Command Line Interface
-
-val includes a CLI for common operations:
-
-```bash
-# Run an evaluation epoch
-d epoch --task=add --n=4
-
-# List available tasks
-d tasks
-
-# Test components
-d test
-```
-
-## Docker Environment
-
-The included Docker environment provides a complete setup for val:
-
-```dockerfile
-# FROM ubuntu:22.04 base with Python, Docker, and other dependencies
-# See Dockerfile for details
-
-# Build the image
-docker build -t val .
-
-# Run the container
-docker run -d \
-  --name val \
-  --network=host \
-  --restart unless-stopped \
-  --privileged --shm-size 4g \
-  -v $(pwd):/app \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  val
+- BIP39 mnemonic handling
+- ECDSA key operations
+- String/bytes conversion utilities
+- File system operations for key storage

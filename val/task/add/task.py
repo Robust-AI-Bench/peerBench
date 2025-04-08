@@ -1,16 +1,16 @@
 import random
 from typing import Optional
 import json
-class AddTask:
+class Task:
     features = ['params', 'result', 'target', 'score', 'model', 'provider', 'token']
     sort_by = ['score']
-    sort_by_asc = [False, True]
+    sort_by_asc = [False]
     description = 'tests a model to add two numberts'
     output_bounds = ['<OUTPUT_JSON>', '</OUTPUT_JSON>']
     temperature = 0
     max_tokens = 10000
 
-    def sample(self , idx:int = None, sample=None,) -> dict:
+    def sample(self , idx:int = None, sample=None) -> dict:
         """
         generate the sample
         """
@@ -18,6 +18,8 @@ class AddTask:
         if sample is not None:
             return sample
         # generate two random numbers from the id seed
+        if idx != None:
+            random.seed(idx)
         idx = idx or random.randint(1, 1000)
         random.seed(idx)
         a = random.randint(1, 100)
@@ -52,13 +54,12 @@ class AddTask:
             'sample': sample,
             'result': result,
         }
+
         # step 3 : score the data
-        data =  self.score(data)
-        return data
+        return self.score(data)
     
     def score(self, data:dict) -> float:
         sample_data = data['sample']['message']
         target = str(sample_data['a']+ sample_data['b'])
         data['score'] =  float(str(target) in  data['result'])
         return data
- 

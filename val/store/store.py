@@ -2,7 +2,8 @@
 import json
 import os
 import time
-from .utils import get_text, sha256
+
+
 
 class Storage:
 
@@ -57,10 +58,16 @@ class Storage:
             data = pd.DataFrame(data)
         return data
 
-    def paths(self):
+    def paths(self, search=None, avoid=None):
         import glob
         paths = glob.glob(f'{self.storage_dirpath}/**/*', recursive=True)
-        return [self.abspath(p) for p in paths if os.path.isfile(p)]
+        paths = [self.abspath(p) for p in paths if os.path.isfile(p)]
+        if search != None:
+            paths = [p for p in paths if search in p]
+        if avoid != None:
+            paths = [p for p in paths if avoid not in p]
+        return paths
+        
 
     def exists(self, path):
         path = self.get_item_path(path)
@@ -138,9 +145,21 @@ class Storage:
                 content.append(self.cid(f))
             content = ''.join(content)
         elif os.path.isfile(path):
-            content =  get_text(path)
+            content =  self.get_text(path)
         else: 
             raise Exception(f'Failed to find path {path}')
-        cid =  sha256(content)
+        cid =  self.sha256(content)
         print(f'cid={cid} path={path}')
         return cid
+
+    def get_text(self, path) -> str:
+        with open(path, 'r') as f:
+            result =  f.read()
+        return result
+    
+
+    def sha256(self, content: str) -> str:
+        import hashlib
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(content.encode('utf-8'))
+        return sha256_hash.hexdigest()

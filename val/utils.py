@@ -34,6 +34,8 @@ from eth_keys.datatypes import Signature, PrivateKey
 from eth_utils import to_checksum_address, keccak as eth_utils_keccak
 from ecdsa.curves import SECP256k1
 from random import shuffle
+import copy
+import json
 
 BIP39_PBKDF2_ROUNDS = 2048
 BIP39_SALT_MODIFIER = "mnemonic"
@@ -578,13 +580,8 @@ def encode_pair(public_key: bytes, private_key: bytes, passphrase: str) -> bytes
 
     return salt + scrypt_params + message.nonce + message.ciphertext
 
-
-
-
 def python2str(x):
-    from copy import deepcopy
-    import json
-    x = deepcopy(x)
+    x = copy.deepcopy(x)
     input_type = type(x)
     if input_type == str:
         return x
@@ -596,7 +593,9 @@ def python2str(x):
         x = json.dumps(list(x))
     elif input_type in [int, float, bool]:
         x = str(x)
-        
+    # remove the quotes
+    if isinstance(x, str) and len(x) > 2 and x[0] == '"' and x[-1] == '"':
+        x = x[1:-1]
     return x
 
 class DeriveJunction:
@@ -803,12 +802,9 @@ def log( *text:str,
         text = [buffer] + list(text) + [buffer]
 
     console = resolve_console(console)
-    try:
-        if flush:
-            console.print(**kwargs, end='\r')
-        console.print(*text, **kwargs)
-    except Exception as e:
-        print(e)
+    if flush:
+        console.print(**kwargs, end='\r')
+    console.print(*text, **kwargs)
 
 
 def submit_future(func, *args, **kwargs):
