@@ -1,43 +1,47 @@
  # start of file
-# Key Management Module
+# Model Evaluation Framework
 
-This module provides cryptographic key management functionality for various blockchain systems.
+This repository contains a framework for evaluating language models on various tasks, including MMLU (Massive Multitask Language Understanding).
 
-## Features
+## Setup
 
-- Support for multiple cryptographic types (sr25519, ed25519, ecdsa)
-- Key generation, storage, and retrieval
-- Signing and verification of messages
-- JWT token generation and verification
-- Mnemonic phrase support
-- Secure key storage
-
-## Usage
-
-```python
-from val.key import Key
-
-# Create a new key
-key = Key()
-
-# Sign a message
-signature = key.sign("Hello, world!")
-
-# Verify a signature
-is_valid = key.verify("Hello, world!", signature, key.public_key)
-
-# Generate a JWT token
-token = key.get_token({"user_id": 123})
-
-# Verify a JWT token
-token_data = key.verify_token(token)
+1. Clone the repository
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
 ```
 
-## Utils
+## MMLU Evaluation
 
-The module includes a utility library for common cryptographic operations:
+The MMLU benchmark covers 57 subjects across STEM, humanities, social sciences, and more, testing models on their knowledge and reasoning abilities.
 
-- BIP39 mnemonic handling
-- ECDSA key operations
-- String/bytes conversion utilities
-- File system operations for key storage
+### Downloading the MMLU Dataset
+
+The dataset will be downloaded automatically when you run the MMLU task for the first time. 
+Alternatively, you can manually download it using:
+
+```bash
+python scripts/download_mmlu.py --data_dir data
+```
+
+### Running Evaluations
+
+To evaluate a model on MMLU:
+
+```bash
+python -m val.val --task mmlu --provider openrouter --n 2
+```
+
+## Available Tasks
+
+- `add`: Simple addition task for testing
+- `mmlu`: Massive Multitask Language Understanding benchmark
+- `task`: Generic task template
+
+## Customization
+
+You can create custom evaluation tasks by adding new task modules in the `val/task/` directory.
+
+## License
+
+MIT

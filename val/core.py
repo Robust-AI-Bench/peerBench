@@ -18,17 +18,17 @@ class val:
 
     epoch_time = 0 # the time of the last epoch defaults to 0 utc timestamp
     def __init__(self,
+                    task : str= 'mmlu', # score function
+                    n_models  : int = 2, # the number of models to test
+                    n_samples = 2, # the number of n_samples per epoch
                     provider = 'openrouter',
-                    n : int = 2, # the number of models to test
-                    task : str= 'task', # score function
                     batch_size : int = 64, # the batch size of the most parallel tasks
                     key : str = None, # the key for the model
                     tempo : int = 3000, # the time between epochs
                     crypto_type='ecdsa',
                     store = 'store',
-                    samples_per_epoch = 1, # the number of samples per epoch
                     models = None, # the models to test
-                    max_sample_age : int = 3600, # the maximum age of the samples
+                    max_sample_age : int = 3600, # the maximum age of the n_samples
                     timeout : int = 4, # timeout per evaluation of the model
                     update : bool =True, # update during the first epoch
                     background : bool = False, # This is the key that we need to change to false
@@ -38,10 +38,10 @@ class val:
 
         self.key = self.get_key(key or 'val', crypto_type=crypto_type)
         self.set_task(task)
-        self.set_models(models, provider=provider, n=n)
-        self.batch_size = min(batch_size, self.n)
+        self.set_models(models, provider=provider, n_models=n_models)
+        self.batch_size = min(batch_size, self.n_models)
         self.timeout = timeout
-        self.samples_per_epoch = samples_per_epoch
+        self.n_samples = n_samples
         self.verbose = verbose
         self.tempo = tempo
         if background:
@@ -52,7 +52,10 @@ class val:
                 sample:Optional[dict]=None, 
                 idx:Optional[str]=None,
                 catch_error:bool = False,
+                task:Optional[str]=None,
                  **kwargs):
+        if task != None:
+            self.set_task(task)
         if catch_error:
             try:
                 return self.eval(model=model, sample=sample, idx=idx, catch_error=False, **kwargs)
@@ -105,7 +108,7 @@ class val:
         """
         return [p.split('model.')[-1] for p in modules(search='model') if 'model.' in p]
 
-    def set_models(self, models=None, provider='openrouter', provider_prefix = 'model.', n=6):
+    def set_models(self, models=None, provider='openrouter', provider_prefix = 'model.', n_models=6):
         
         self.provider = self.module('model.'+provider)()
         info = {
@@ -117,15 +120,15 @@ class val:
         self.provider.info = info
         self.models = models or self.provider.models() # get the models from the provider
         shuffle(self.models)
-        self.models = self.models[:n]
-        self.n = len(self.models)
+        self.models = self.models[:n_models]
+        self.n_models = len(self.models)
         assert len(self.models) > 0, f'No models found for provider {provider}'
         assert len(self.models) > 0, f'No models found for provider {provider}'
         assert hasattr(self.provider, 'forward'), f'Provider {self.provider} does not have a forward function'
         return {'success': True, 'msg': 'Provider set', 'provider': provider}
 
 
-    def set_task(self, task: str, tasks_path='~/.val/tasks', store='val.store'):
+    def set_task(self, task: str, tasks_path='~/.val/tasks', store='store'):
         if task == None and hasattr(self, 'task'):
             return self.task.info
         if task == None and hasattr(self, 'task'):
@@ -133,6 +136,7 @@ class val:
         if isinstance(task, str):
             task_name = task
             task = self.module('task.'+task)()
+            print(f'Loading task {task_name}', task)
         else:
             task_name = task.__class__.__name__.lower()
         assert hasattr(task, 'forward'), f'Task {task} does not have a forward function'
@@ -185,7 +189,7 @@ class val:
         """
         DEFAULT AGGREGATE FUNCTION
         This function aggregates the results of the task into a dataframe
-        and returns the top n results
+        and returns the top n_models results
         """
         results =  df(self.store.items())
 
@@ -195,7 +199,7 @@ class val:
         results =  results[['model', 'score']]
         
         results = results.sort_values(by='score', ascending=False)
-        results['n'] = results['score'].apply(lambda x: len(x))
+        results['n_samples'] = results['score'].apply(lambda x: len(x))
         results['score'] = results['score'].apply(lambda x: sum(x)/len(x))
 
         results = results.sort_values(by='score', ascending=False)
@@ -204,14 +208,19 @@ class val:
         return results
 
     # TODO: UPLOAD THE AGGREGATE FUNCTION TO SERVER
-    def results(self, data=None, **kwargs):
+    def results(self, task = None, **kwargs):
+        if task != None:
+            self.set_task(task)
         aggfn = self.task.aggregate if hasattr(self.task, 'aggregate') else self.aggregate
-        data = data or self.store.items()
+        data = self.store.items()
         data = [d for d in data if 'score' in d]
 
         if len(data) == 0:
             return df([])
-        return df(data)
+        else:
+            data = df(data)
+            data = aggfn(data, **kwargs)
+        return data
 
     def _rm_all_store(self):
         return self.store._rm_all()
@@ -219,15 +228,34 @@ class val:
     def tasks(self):
         return [t.split('task.')[-1] for t in  modules(search='task')]
 
+    def file2text(self, path) -> dict:
+        assert os.path.isdir(path), f'File {path} is not a directory'
+        files = os.listdir(path)
+        file2text = {}
+        for file in files:
+            if file in ['__init__.py', '__pycache__', '.DS_Store', '.git']:
+                continue
+            file2text[file] =  self.get_text(os.path.join(path, file))
+        return file2text
+
+    def task2hash(self, task = 'mmlu'):
+        """
+        Get the task hash
+        """
+        task = self.module('task.'+task)()
+        dirpath = os.path.dirname(inspect.getsourcefile(task.__class__))
+        return self.hash(self.file2text(dirpath))
+
     def sample(self, idx:int=None):
         """
         Get the sample from the task
         """
         return self.task.sample(idx=idx)
 
-    def epoch(self, task:Optional[str]=None, models:Optional[List[str]]=None, **kwargs):
+    def epoch(self, task:Optional[str]=None, models:Optional[List[str]]=None, n_samples=None, **kwargs):
         buffer = f'\n{"-"*42}\n'
 
+        n_samples = n_samples or self.n_samples
         if task != None:
             self.set_task(task)
         if models != None:
@@ -239,29 +267,30 @@ class val:
         results = []
         epoch_info = {
             'epoch_time': time.time(),
-            'samples_per_epoch': self.samples_per_epoch,
+            'n_samples': self.n_samples,
             'batch_size': self.batch_size,
             'num_batches': num_batches,
             'task': self.task.info,
             'models': self.models,
         }
         print(buffer, f'Epoch({self.epoch_time})', buffer, epoch_info, buffer)
-        for sample_idx in range(self.samples_per_epoch):
+        for sample_idx in range(self.n_samples):
             sample = self.sample()
             sample_cid = self.hash(sample) # hash the sample
-            print(buffer, f'Sample({sample_cid[:8]})', buffer, sample, buffer)
+            print(buffer, f'Sample({sample_cid[:8]} idx={sample_idx}/{self.n_samples})', buffer, sample, buffer)
             for batch_idx, model_batch in enumerate(batched_models):
-                futures = []
+                future2model = {}
                 sample_cid = self.hash(sample) # hash the sample
                 batch_idx = batch_idx + 1
                 print(buffer, f'Batch({batch_idx}/{num_batches})', buffer)
                 for model in model_batch:
                     print(f'⚡️Eval(model={model})')
                     future = threadpool.submit(self.eval, model=model, sample=sample)
-                    futures.append((future, model))
+                    future2model[future] = model
                 print(buffer, f'Results', buffer)
                 try:
-                    for f, model in futures:
+                    for f in as_completed(future2model, timeout=self.timeout):
+                        model = future2model[f]
                         try:
                             r = f.result()
                             if isinstance(r, dict) and 'score' in r:
@@ -300,10 +329,11 @@ class val:
         results = results.groupby('model').agg(lambda x: x.tolist()).reset_index()
         results =  results[features]
         results = results.sort_values(by='score', ascending=False)
-        results['samples'] = results['score'].apply(lambda x: len(x))
+        results['n_samples'] = results['score'].apply(lambda x: len(x))
         results['score'] = results['score'].apply(lambda x: sum(x)/len(x))
         results['time_delta'] = results['time_delta'].apply(lambda x: sum(x)/len(x))
-        # count the number o samples per model
+        results['sample_cids'] = results['sample_cid'].apply(lambda x: list(set(x)))
+        # count the number o n_samples per model
         results = results.sort_values(by=['score', 'time_delta'], ascending=[False, True])
         results = results.reset_index(drop=True)
         print(f'Epoch complete! Processed {len(results)} results successfully')
@@ -325,7 +355,7 @@ class val:
         return self.module(f'val.utils.{util_name}')
 
     def get_key(self, key='fam', crypto_type='ecdsa'):
-        return self.module('val.key')().get_key(key, crypto_type=crypto_type)
+        return self.module('key')().get_key(key, crypto_type=crypto_type)
 
     def add_key(self, key='fam', crypto_type='ecdsa'):
         return self.get_key().add_key(key, crypto_type=crypto_type)
@@ -396,9 +426,17 @@ class val:
 
     @classmethod
     def init(cls, globals_dict=None, **kwargs):
-        if globals_dict != None:
-            cls.add_globals(globals_dict)
-        
+        if globals_dict != None:        
+            #add the functions and classes of the module to the global namespace
+            globals_dict = globals_dict or {}
+            for k,v in val.__dict__.items():
+                globals_dict[k] = v     
+            for f in dir(val):
+                def wrapper_fn(f, *args, **kwargs):
+                    fn = getattr(val(), f)
+                    return fn(*args, **kwargs)
+                globals_dict[f] = partial(wrapper_fn, f)
+
         for util in cls().utils():
             def wrapper_fn(util, *args, **kwargs):
                 import importlib
@@ -412,26 +450,13 @@ class val:
         """
         return get_hash(data, mode=mode, **kwargs)
 
-    @classmethod
-    def add_globals(cls, globals_input:dict = None):
-        """
-        add the functions and classes of the module to the global namespace
-        """
-        globals_input = globals_input or {}
-        for k,v in val.__dict__.items():
-            globals_input[k] = v     
-        for f in dir(val):
-            def wrapper_fn(f, *args, **kwargs):
-                fn = getattr(val(), f)
-                return fn(*args, **kwargs)
-            globals_input[f] = partial(wrapper_fn, f)
 
 
     @classmethod
     def run(cls, *args, **kwargs):
         return cls(*args, **kwargs).epoch()
 
-            
+
 def main():
     return val().cli()
 

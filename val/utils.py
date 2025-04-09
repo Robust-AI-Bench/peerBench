@@ -228,12 +228,13 @@ def path2classes(path='./',
     return results
 
 
-def shorten_name(name:str, max_length=20) -> str:
+def shorten_name(name:str, core_name = 'core') -> str:
+    core_pattern = f'.{core_name}.'
+    if core_pattern in name:
+        return name.split(core_pattern)[0]
     chunks = name.split('.')[1:-1]
     new_name = ''
     for chunk in chunks:
-        if len(new_name) + len(chunk) > max_length:
-            break
         if chunk in new_name:
             continue
         new_name += chunk + '.'
@@ -279,11 +280,6 @@ def module(name:str, **kwargs):
     _tree = tree()
     if name in _tree:
         name = _tree[name]
-    else:
-        for k,v in _tree.items():
-            if name in v:
-                name = v
-                break
     return obj(name)
 
 
@@ -297,14 +293,14 @@ def submit(func, *args, **kwargs):
 
 
 def as_completed(futures, timeout=10):
+    import concurrent
+    import time
     start = time.time()
-    for f in futures:
-        f.join(timeout)
+    for future in concurrent.futures.as_completed(futures, timeout=timeout):
         if time.time() - start > timeout:
             break
-        if f.is_alive():
-            continue
-        yield f
+        yield future.result()
+    
 
 
 def thread(fn: Union['callable', str],  
