@@ -1,47 +1,132 @@
- # start of file
-# Model Evaluation Framework
 
-This repository contains a framework for evaluating language models on various tasks, including MMLU (Massive Multitask Language Understanding).
+# Val - Decentralized Model Evaluation Framework
 
-## Setup
+Val is a powerful, flexible framework for evaluating and benchmarking language models across various tasks. It provides a simple, unified interface to test models from different providers and track their performance.
 
-1. Clone the repository
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+## Features
 
-## MMLU Evaluation
+- **Multi-provider support**: Test models from OpenRouter and other providers
+- **Customizable tasks**: Built-in support for MMLU and other benchmarks, with an extensible task system
+- **Parallel evaluation**: Efficiently evaluate multiple models in parallel
+- **Result storage**: Automatically store and retrieve evaluation results
+- **Cryptographic verification**: Sign and verify evaluation results with ECDSA keys
 
-The MMLU benchmark covers 57 subjects across STEM, humanities, social sciences, and more, testing models on their knowledge and reasoning abilities.
-
-### Downloading the MMLU Dataset
-
-The dataset will be downloaded automatically when you run the MMLU task for the first time. 
-Alternatively, you can manually download it using:
+## Installation
 
 ```bash
-python scripts/download_mmlu.py --data_dir data
+# Install from PyPI
+pip install val
+
+# Or install from source
+git clone https://github.com/val-ai/val.git
+cd val
+pip install -e .
 ```
 
-### Running Evaluations
+## Quick Start
 
-To evaluate a model on MMLU:
+```python
+from val import Val
+
+# Run a quick evaluation on MMLU
+results = Val.run(
+    task='mmlu',
+    n_samples=10,
+    models=[
+        'meta-llama/llama-4-maverick',
+        'anthropic/claude-3.7-sonnet',
+        'qwen/qwen-2.5-7b-instruct'
+    ]
+)
+
+print(results)
+```
+
+## Command Line Interface
+
+Val includes a convenient CLI for running evaluations:
 
 ```bash
-python -m val.val --task mmlu --provider openrouter --n 2
+# Evaluate models on MMLU
+python -m val.val --task mmlu --provider openrouter --n_models 3 --n_samples 10
+
+# View available tasks
+python -m val.val tasks
 ```
 
-## Available Tasks
+## Core Concepts
 
-- `add`: Simple addition task for testing
+### Tasks
+
+Tasks define the evaluation criteria. Each task provides:
+- Sample generation
+- Scoring logic
+- Result aggregation
+
+Built-in tasks include:
 - `mmlu`: Massive Multitask Language Understanding benchmark
-- `task`: Generic task template
+- `math500`: Mathematical reasoning evaluation
 
-## Customization
+### Models
 
-You can create custom evaluation tasks by adding new task modules in the `val/task/` directory.
+Val supports various model providers, with OpenRouter as the default. You can specify:
+- Which models to evaluate
+- How many samples to test
+- Batch size for parallel evaluation
+
+### Results
+
+Evaluation results include:
+- Score: Performance metric (task-specific)
+- Time delta: Execution time
+- Sample information: Test case details
+- Cryptographic verification: Signed results for verification
+
+## Advanced Usage
+
+### Custom Tasks
+
+Create your own evaluation tasks by extending the `Task` class:
+
+```python
+from val.task.task import Task
+
+class MyCustomTask(Task):
+    description = "Tests model ability to solve custom problems"
+    
+    def sample(self, idx=None, sample=None):
+        # Generate or return sample
+        pass
+        
+    def score(self, data):
+        # Score the model's response
+        pass
+```
+
+### Background Evaluation
+
+Run evaluations in the background:
+
+```python
+val = Val(
+    task='mmlu',
+    n_models=3,
+    background=True,
+    tempo=3600  # Run every hour
+)
+```
+
+## Development
+
+- **Code style**: Follow PEP 8 guidelines
+- **Testing**: Run tests with pytest
+- **Contributing**: See CONTRIBUTING.md for guidelines
 
 ## License
 
-MIT
+MIT License - See LICENSE file for details
+
+## Community
+
+- GitHub: [https://github.com/val-ai/val](https://github.com/val-ai/val)
+- Discord: [Join our community](https://discord.gg/val-ai-941362322000203776)

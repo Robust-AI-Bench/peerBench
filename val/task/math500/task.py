@@ -6,36 +6,37 @@ class Task:
     description = 'Multiple choice math problems from MATH-500 dataset'
     features = ['url', 'name', 'score']
 
-    def __init__(self, fn='info', params=None, split='test'):
+    def __init__(self, fn='info', 
+                n_choices=20, 
+                split='test'):
         """
         Initialize the task with a function name (string)
         and optional parameters (dictionary).
         """
         self.fn = fn
-        self.params = params or {}
         
         # Load the math500 dataset from Hugging Face
         self.dataset = datasets.load_dataset('HuggingFaceH4/MATH-500', split=split)
         
         # Default number of multiple choice options
-        self.num_choices = self.params.get('num_choices', 4)
+        self.n_choices = n_choices
 
-    def create_multiple_choice(self, sample, num_choices=None):
+    def create_multiple_choice(self, sample, n_choices=None):
         """
         Create a multiple choice problem from a sample.
         
         Args:
             sample: The sample containing the question and answer
-            num_choices: Number of choices to generate (including correct answer)
+            n_choices: Number of choices to generate (including correct answer)
             
         Returns:
             A dictionary with the question, choices, and correct answer index
         """
-        if num_choices is None:
-            num_choices = self.num_choices
+        if n_choices is None:
+            n_choices = self.n_choices
             
-        # Ensure num_choices is at least 2 and not more than available samples
-        num_choices = max(2, min(num_choices, len(self.dataset)))
+        # Ensure n_choices is at least 2 and not more than available samples
+        n_choices = max(2, min(n_choices, len(self.dataset)))
         # Get the correct answer
         correct_answer = sample['answer']
         
@@ -48,14 +49,14 @@ class Task:
             dataset_indices.remove(current_idx)
             
         # Randomly select other samples for incorrect answers
-        selected_indices = random.sample(dataset_indices, min(num_choices - 1, len(dataset_indices)))
+        selected_indices = random.sample(dataset_indices, min(n_choices - 1, len(dataset_indices)))
         incorrect_samples = [self.dataset[idx]['answer'] for idx in selected_indices]
         
         # Create choices with the correct answer at a random position
         choices = incorrect_samples.copy()
-        correct_idx = random.randint(0, num_choices - 1)
+        correct_idx = random.randint(0, n_choices - 1)
         choices.insert(correct_idx, correct_answer)
-        choices = choices[:num_choices]  # Ensure we have exactly num_choices
+        choices = choices[:n_choices]  # Ensure we have exactly n_choices
         
         # Create the multiple choice question
         question = sample['problem']
@@ -67,7 +68,7 @@ class Task:
             'original_sample': sample
         }
 
-    def sample(self, sample=None):
+    def sample(self, sample=None) -> dict:
         """
         Grab a data sample from math500 at a given index and convert it to multiple choice.
         """
@@ -85,7 +86,9 @@ class Task:
         sample = self.dataset[idx]
         
         # Convert to multiple choice format
-        return self.create_multiple_choice(sample, self.num_choices)
+        sample_with_choices = self.create_multiple_choice(sample, self.n_choices)
+
+        return sample_with_choices
         
     def forward(self, model, sample=None, **call_params):
         """
@@ -101,11 +104,14 @@ class Task:
             formatted_question += f"{chr(65+i)}. {choice}\n"
         
         # Get model response
+        formatted_question += 'respond in only the integer index of the correct answer in a json {"index": int}'
+        formatted_question += "\n\nAnswer:"
+        # Call the model with the formatted question
         response = model(message=formatted_question)
         
         # Basic scoring logic - check if the model selected the correct choice
         # This is a simple implementation and might need to be refined
-        correct_number = chr(65 + mc_sample['correct_idx'])
+        correct_number = str(mc_sample['correct_idx'])
         score = 0
         
         # Check if the correct letter appears in the response

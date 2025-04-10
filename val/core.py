@@ -16,13 +16,13 @@ from concurrent.futures import ThreadPoolExecutor
 print = log
 
 
-class val:
+class Val:
 
     epoch_time = 0 # the time of the last epoch defaults to 0 utc timestamp
     def __init__(self,
 
                     # TASK
-                    task : str= 'mmlu', # score function
+                    task : str= 'math500', # score function
                     task_params = {}, # the parameters for the task
 
                     # MODEL
@@ -40,9 +40,10 @@ class val:
 
                     # MISC
                     tempo : int = 3000, # the time between epochs
-                    timeout : int = 4, # timeout per evaluation of the model
+                    timeout : int = 10, # timeout per evaluation of the model
                     background : bool = False, # This is the key that we need to change to false
                     verbose: bool = True , # print verbose output
+
                  **kwargs):
         self.batch_size = batch_size
         self.threadpool = ThreadPoolExecutor(max_workers=min(max_workers, os.cpu_count() * 4))
@@ -103,22 +104,23 @@ class val:
         self.store.put(f"{data['sample_cid']}/{data['model']}.json", data)
         return data
 
-
-    def sample_paths(self):
-        """
-        Get the sample paths
-        """
-        paths = self.store.paths()
-        paths = [p for p in paths if '/sample.json' in p]
-        return paths
-
     def providers(self):
         """
         Get the providers
         """
         return [p.split('model.')[-1] for p in modules(search='model') if 'model.' in p]
 
-    def set_models(self, models=None, provider='openrouter', provider_prefix = 'model.',  params=None, n_models=6):
+    def set_models(self, 
+                    models: Optional[List[str]]=None, 
+                    n_models=6,
+                    provider='openrouter', 
+                    params:Optional[Dict]=None
+                    ):
+        """
+        Set the models to use
+        """
+
+        
         if models == None and hasattr(self, 'models'):
             return self.models
         self.provider = self.module('model.'+provider)(params or {})
@@ -137,7 +139,6 @@ class val:
         assert len(self.models) > 0, f'No models found for provider {provider}'
         assert hasattr(self.provider, 'forward'), f'Provider {self.provider} does not have a forward function'
         return self.models
-
 
     def set_task(self, task: str, tasks_path='~/.val/tasks', store='store', params=None):
         if task == None and hasattr(self, 'task'):
@@ -237,24 +238,6 @@ class val:
     def tasks(self):
         return [t.split('task.')[-1] for t in  modules(search='task')]
 
-    def file2text(self, path) -> dict:
-        assert os.path.isdir(path), f'File {path} is not a directory'
-        files = os.listdir(path)
-        file2text = {}
-        for file in files:
-            if file in ['__init__.py', '__pycache__', '.DS_Store', '.git']:
-                continue
-            file2text[file] =  self.get_text(os.path.join(path, file))
-        return file2text
-
-    def task2hash(self, task = 'mmlu'):
-        """
-        Get the task hash
-        """
-        task = self.module('task.'+task)()
-        dirpath = os.path.dirname(inspect.getsourcefile(task.__class__))
-        return self.hash(self.file2text(dirpath))
-
     def sample(self, sample:int=None, task=None):
 
         """
@@ -267,6 +250,8 @@ class val:
 
     def await_futures(self, futures):
         results = []
+        show_results = []
+
         print(f'Results({len(futures)})')
         try:
             for f in as_completed(futures, timeout=self.timeout):
@@ -277,8 +262,18 @@ class val:
                         results.append(r)
 
                         # make the pritn statement nicer
-    
-                        print(f"✅Result(score={r['score']} model={r['model']}, sample={r['sample_cid'][:8]} speed={round(r['time_delta'], 2)}s)✅")
+                        if len(show_results) < 10:
+                            show_results.append(r)
+                        else:
+                            df = pd.DataFrame(show_results)
+                            df['sample_cid'] = df['sample_cid'].apply(lambda x: x[:8])
+                            buffer = f'\n{"-"*42}\n'
+                            self.completed_samples += len(show_results)
+
+                            print(buffer, f'Progress({self.completed_samples}/{self.total_samples})', buffer)
+                            print(df[['sample_cid', 'model', 'score', 'time_delta']], '\n')
+                            show_results = []
+
                     else:
                         # Handle the case where the result is not a dictionary
                         if self.verbose:
@@ -308,12 +303,12 @@ class val:
         }
         print(buffer, f'Epoch({self.epoch_time})', buffer, epoch_info, buffer)
         futures = []
+        self.total_samples = n_samples * n_models
+        self.completed_samples = 0
         for sample_idx in range(self.n_samples):
             sample = self.sample()
             sample_cid = self.hash(sample) # hash the sample
-            print(buffer, f'Sample({sample_cid[:8]} idx={sample_idx}/{self.n_samples})', buffer)
             for model in self.models:
-                print(f'Eval(sample={sample_cid[:8]} model={model})⚡️')
                 if len(futures) > self.batch_size:
                     results += self.await_futures(futures)
                     futures = []
@@ -328,11 +323,6 @@ class val:
         results = self.process_results(results)
         return results
 
-
-
-
-
-
     def process_results(self,results, features = ['model', 'score', 'time_delta']):
         """
         Process the results of the epoch
@@ -344,16 +334,15 @@ class val:
         results = results.sort_values(by='score', ascending=False)
         # aggregate by model
         results = results.groupby('model').agg(lambda x: x.tolist()).reset_index()
-        results =  results[features]
+        results = results[features].reset_index(drop=True)
         results = results.sort_values(by='score', ascending=False)
         results['n_samples'] = results['score'].apply(lambda x: len(x))
         results['score'] = results['score'].apply(lambda x: sum(x)/len(x))
         results['time_delta'] = results['time_delta'].apply(lambda x: sum(x)/len(x))
         # count the number o n_samples per model
-        results = results.sort_values(by=['score', 'time_delta'], ascending=[False, True])
-        results = results.reset_index(drop=True)
+        results = results.sort_values(by=['score'], ascending=[False])
         print(f'Epoch complete! Processed {len(results)} results successfully')
-        return results[features].reset_index(drop=True)
+        return results
     
     @classmethod
     def module(cls, module_name):
@@ -400,6 +389,10 @@ class val:
             task_cids[task] = task_cid
         return task_cids
 
+    def samples(self, task='math500'):
+        self.set_task(task)
+        return self.storage.items()
+
     def cli(self, default_fn = 'forward') -> None:
         """
         Run the command line interface
@@ -429,36 +422,34 @@ class val:
                 assert parsing_kwargs is False, 'Cannot mix positional and keyword arguments'
                 args.append(str2python(arg))
         module_name = module_obj.__class__.__name__.lower()
-        if len(args)> 0:
-            kwargs_from_args = {k: v for k, v in zip(inspect.getfullargspec(fn_obj).args[1:], args)}
-            params  = {**kwargs, **kwargs_from_args}
-        else:
-            params = kwargs
         # remove the self and kwargs from the params
-        print(f'Running(fn={module_name}/{fn} params={params})')
-        output = fn_obj(**params) if callable(fn_obj) else fn_obj
+        print(f'Running({module_name}/{fn})')
+
+        output = fn_obj(*args,**kwargs) if callable(fn_obj) else fn_obj
         speed = time.time() - t0
         print(output)
 
     @classmethod
     def init(cls, globals_dict=None, **kwargs):
+        self = cls(**kwargs)
         if globals_dict != None:        
             #add the functions and classes of the module to the global namespace
             globals_dict = globals_dict or {}
-            for k,v in val.__dict__.items():
+            for k,v in self.__dict__.items():
                 globals_dict[k] = v     
-            for f in dir(val):
+            for f in dir(self):
                 def wrapper_fn(f, *args, **kwargs):
-                    fn = getattr(val(), f)
+                    fn = getattr(self, f)
                     return fn(*args, **kwargs)
                 globals_dict[f] = partial(wrapper_fn, f)
 
-        for util in cls().utils():
+        for util in self.utils():
             def wrapper_fn(util, *args, **kwargs):
                 import importlib
                 fn = obj(f'val.utils.{util}')
+                import commune as c
                 return fn(*args, **kwargs)
-            setattr(val, util, partial(wrapper_fn, util))
+            setattr(cls, util, partial(wrapper_fn, util))
 
     def hash(self, data='hey', mode  = 'sha256', **kwargs):
         """
@@ -468,23 +459,21 @@ class val:
             return data['sample_cid'] 
         return get_hash(data, mode=mode, **kwargs)
 
-
-
     @classmethod
     def run(cls, *args, 
             task='math500',
             n_samples=10,
+            timeout = 10,
             models= [ 'meta-llama/llama-4-maverick',
                      'anthropic/claude-3.7-sonnet', 
                      'qwen/qwen-2.5-7b-instruct', 
                      'qwen/qwen2.5-32b-instruct',
                      'anthropic/claude-3.5-sonnet', 
-                     ],
-     **kwargs):
-        return cls(*args, models=models, n_samples=n_samples, **kwargs).epoch()
+                     ], **task_params):
 
-
+        return cls(*args, models=models, n_samples=n_samples, timeout=timeout, task_params=task_params).epoch()
+        
 def main():
-    return val().cli()
+    return Val().cli()
 
 

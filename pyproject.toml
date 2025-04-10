@@ -64,7 +64,7 @@ isort = "^5.13.2"
 pytest-cov = "^4.1.0"
 
 [tool.poetry.scripts]
-v = "val.core:main"
+v = "val:main"
 
 [tool.mypy]
 files = ["val"]
