@@ -14,32 +14,41 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 print = log
+
+
 class val:
 
     epoch_time = 0 # the time of the last epoch defaults to 0 utc timestamp
     def __init__(self,
+
+                    # TASK
                     task : str= 'mmlu', # score function
-                    n_models  : int = 2, # the number of models to test
+                    task_params = {}, # the parameters for the task
+
+                    # MODEL
+                    n_models  : int = 30, # the number of models to test
                     n_samples = 2, # the number of n_samples per epoch
                     provider = 'openrouter',
-                    batch_size : int = 64, # the batch size of the most parallel tasks
-                    key : str = None, # the key for the model
-                    tempo : int = 3000, # the time between epochs
-                    crypto_type='ecdsa',
-                    store = 'store',
                     models = None, # the models to test
-                    max_sample_age : int = 3600, # the maximum age of the n_samples
+                    provider_params = {}, # the parameters for the provide
+                    batch_size : int = 64, # the batch size of the most parallel tasks
+
+                    # KEY 
+                    key : str = None, # the key for the model
+                    crypto_type='ecdsa',
+                    max_workers : int = 128, # the number of workers to use
+
+                    # MISC
+                    tempo : int = 3000, # the time between epochs
                     timeout : int = 4, # timeout per evaluation of the model
-                    update : bool =True, # update during the first epoch
                     background : bool = False, # This is the key that we need to change to false
                     verbose: bool = True , # print verbose output
-                    path : str= None, # the store path for the model eval, if not null then the model eval is stored in this directory
                  **kwargs):
-
+        self.batch_size = batch_size
+        self.threadpool = ThreadPoolExecutor(max_workers=min(max_workers, os.cpu_count() * 4))
         self.key = self.get_key(key or 'val', crypto_type=crypto_type)
-        self.set_task(task)
-        self.set_models(models, provider=provider, n_models=n_models)
-        self.batch_size = min(batch_size, self.n_models)
+        self.set_task(task, params=task_params)
+        self.set_models(models, provider=provider, n_models=n_models, params=provider_params)
         self.timeout = timeout
         self.n_samples = n_samples
         self.verbose = verbose
@@ -50,15 +59,16 @@ class val:
     def eval(self, 
                 model:dict = None, 
                 sample:Optional[dict]=None, 
-                idx:Optional[str]=None,
                 catch_error:bool = False,
                 task:Optional[str]=None,
                  **kwargs):
         if task != None:
             self.set_task(task)
+        if model == None:
+            model = random.choice(self.models)
         if catch_error:
             try:
-                return self.eval(model=model, sample=sample, idx=idx, catch_error=False, **kwargs)
+                return self.eval(model=model, sample=sample, catch_error=False, **kwargs)
             except Exception as e:
                 print(f'Error({e})')
                 return {'success': False, 'msg': str(e)}
@@ -66,7 +76,7 @@ class val:
         # resolve the model
         if model is None:
             model = self.models[0]
-        sample = self.task.sample(sample=sample, idx=idx)
+        sample = self.task.sample(sample=sample)
         # run the task over the model function
         model_fn = lambda **kwargs : self.provider.forward(model=model, sample=sample,  **kwargs)
         data = self.task.forward(model_fn)
@@ -108,9 +118,10 @@ class val:
         """
         return [p.split('model.')[-1] for p in modules(search='model') if 'model.' in p]
 
-    def set_models(self, models=None, provider='openrouter', provider_prefix = 'model.', n_models=6):
-        
-        self.provider = self.module('model.'+provider)()
+    def set_models(self, models=None, provider='openrouter', provider_prefix = 'model.',  params=None, n_models=6):
+        if models == None and hasattr(self, 'models'):
+            return self.models
+        self.provider = self.module('model.'+provider)(params or {})
         info = {
             'name': provider,
             'cid': self.hash(provider),
@@ -125,12 +136,10 @@ class val:
         assert len(self.models) > 0, f'No models found for provider {provider}'
         assert len(self.models) > 0, f'No models found for provider {provider}'
         assert hasattr(self.provider, 'forward'), f'Provider {self.provider} does not have a forward function'
-        return {'success': True, 'msg': 'Provider set', 'provider': provider}
+        return self.models
 
 
-    def set_task(self, task: str, tasks_path='~/.val/tasks', store='store'):
-        if task == None and hasattr(self, 'task'):
-            return self.task.info
+    def set_task(self, task: str, tasks_path='~/.val/tasks', store='store', params=None):
         if task == None and hasattr(self, 'task'):
             return self.task
         if isinstance(task, str):
@@ -142,6 +151,7 @@ class val:
         assert hasattr(task, 'forward'), f'Task {task} does not have a forward function'
         assert callable(task.forward), f'No task function in task {task}'
         tasks_path= tasks_path + f'/{task_name}'
+        
         self.store = self.module(store)(tasks_path) # prefix the store with the tasks path
         task_cid = self.hash(inspect.getsource(task.__class__))
         task_path = f'{task_name}/task.json'
@@ -193,7 +203,7 @@ class val:
         """
         results =  df(self.store.items())
 
-        results = results.sort_values(by=self.task.sort_by, ascending=self.task.sort_by_asc )
+        results = results.sort_values(by='score', ascending=False )
         # aggregate by model
         results = results.groupby('model').agg(lambda x: x.tolist()).reset_index()
         results =  results[['model', 'score']]
@@ -209,8 +219,7 @@ class val:
 
     # TODO: UPLOAD THE AGGREGATE FUNCTION TO SERVER
     def results(self, task = None, **kwargs):
-        if task != None:
-            self.set_task(task)
+        self.set_task(task)
         aggfn = self.task.aggregate if hasattr(self.task, 'aggregate') else self.aggregate
         data = self.store.items()
         data = [d for d in data if 'score' in d]
@@ -246,67 +255,75 @@ class val:
         dirpath = os.path.dirname(inspect.getsourcefile(task.__class__))
         return self.hash(self.file2text(dirpath))
 
-    def sample(self, idx:int=None):
+    def sample(self, sample:int=None, task=None):
+
         """
         Get the sample from the task
         """
-        return self.task.sample(idx=idx)
+        self.set_task(task)
+        return self.task.sample(sample=sample)
 
-    def epoch(self, task:Optional[str]=None, models:Optional[List[str]]=None, n_samples=None, **kwargs):
+
+
+    def await_futures(self, futures):
+        results = []
+        print(f'Results({len(futures)})')
+        try:
+            for f in as_completed(futures, timeout=self.timeout):
+                try:
+                    r = f.result()
+                    if isinstance(r, dict) and 'score' in r:
+                        # Add emoji to the result
+                        results.append(r)
+
+                        # make the pritn statement nicer
+    
+                        print(f"✅Result(score={r['score']} model={r['model']}, sample={r['sample_cid'][:8]} speed={round(r['time_delta'], 2)}s)✅")
+                    else:
+                        # Handle the case where the result is not a dictionary
+                        if self.verbose:
+                            print(f'❌EvalError(result={r})❌')
+                except Exception as e:
+                    if self.verbose:
+                        print(f'❌BatchError({e})❌')
+        except TimeoutError as e:
+            print(f'Timeout error: {e}')
+        
+        return results
+
+    def epoch(self, task:Optional[str]=None, models:Optional[List[str]]=None, n_samples=None,**kwargs):
         buffer = f'\n{"-"*42}\n'
 
+        self.set_task(task)
+        self.set_models(models)
         n_samples = n_samples or self.n_samples
-        if task != None:
-            self.set_task(task)
-        if models != None:
-            self.set_models(models)
-        threadpool = ThreadPoolExecutor(max_workers=128)
-        n = len(self.models)
-        batched_models = [self.models[i:i+self.batch_size] for i in range(0, n, self.batch_size)]
-        num_batches = len(batched_models)
+        n_models = len(self.models)
         results = []
         epoch_info = {
             'epoch_time': time.time(),
             'n_samples': self.n_samples,
             'batch_size': self.batch_size,
-            'num_batches': num_batches,
             'task': self.task.info,
             'models': self.models,
         }
         print(buffer, f'Epoch({self.epoch_time})', buffer, epoch_info, buffer)
+        futures = []
         for sample_idx in range(self.n_samples):
             sample = self.sample()
             sample_cid = self.hash(sample) # hash the sample
-            print(buffer, f'Sample({sample_cid[:8]} idx={sample_idx}/{self.n_samples})', buffer, sample, buffer)
-            for batch_idx, model_batch in enumerate(batched_models):
-                future2model = {}
-                sample_cid = self.hash(sample) # hash the sample
-                batch_idx = batch_idx + 1
-                print(buffer, f'Batch({batch_idx}/{num_batches})', buffer)
-                for model in model_batch:
-                    print(f'⚡️Eval(model={model})')
-                    future = threadpool.submit(self.eval, model=model, sample=sample)
-                    future2model[future] = model
-                print(buffer, f'Results', buffer)
-                try:
-                    for f in as_completed(future2model, timeout=self.timeout):
-                        model = future2model[f]
-                        try:
-                            r = f.result()
-                            if isinstance(r, dict) and 'score' in r:
-                                # Add emoji to the result
-                                results.append(r)
-                                print(f"✅Result(score={r['score']} model={r['model']})")
-                            else:
-                                # Handle the case where the result is not a dictionary
-                                if self.verbose:
-                                    print(f'❌EvalError(model={model} result={r})❌')
-                        except Exception as e:
-                            if self.verbose:
-                                print(f'❌BatchError({e})❌')
-                except TimeoutError as e:
-                    print(f'Timeout error: {e}')
-
+            print(buffer, f'Sample({sample_cid[:8]} idx={sample_idx}/{self.n_samples})', buffer)
+            for model in self.models:
+                print(f'Eval(sample={sample_cid[:8]} model={model})⚡️')
+                if len(futures) > self.batch_size:
+                    results += self.await_futures(futures)
+                    futures = []
+                else: 
+                    # submit the model to the threadpool
+                    f = self.threadpool.submit(self.eval, model=model, sample=sample, catch_error=True, **kwargs)
+                    futures.append(f)
+        if len(futures) > 0:
+            results += self.await_futures(futures)
+            futures = []
         self.epoch_time = time.time()
         results = self.process_results(results)
         return results
@@ -324,7 +341,7 @@ class val:
             return {'success': False, 'msg': 'No results to vote on'}
         
         results = df(results)
-        results = results.sort_values(by=self.task.sort_by, ascending=False)
+        results = results.sort_values(by='score', ascending=False)
         # aggregate by model
         results = results.groupby('model').agg(lambda x: x.tolist()).reset_index()
         results =  results[features]
@@ -332,7 +349,6 @@ class val:
         results['n_samples'] = results['score'].apply(lambda x: len(x))
         results['score'] = results['score'].apply(lambda x: sum(x)/len(x))
         results['time_delta'] = results['time_delta'].apply(lambda x: sum(x)/len(x))
-        results['sample_cids'] = results['sample_cid'].apply(lambda x: list(set(x)))
         # count the number o n_samples per model
         results = results.sort_values(by=['score', 'time_delta'], ascending=[False, True])
         results = results.reset_index(drop=True)
@@ -448,13 +464,24 @@ class val:
         """
         Hash the data
         """
+        if isinstance(data, dict) and 'sample_cid' in data :
+            return data['sample_cid'] 
         return get_hash(data, mode=mode, **kwargs)
 
 
 
     @classmethod
-    def run(cls, *args, **kwargs):
-        return cls(*args, **kwargs).epoch()
+    def run(cls, *args, 
+            task='math500',
+            n_samples=10,
+            models= [ 'meta-llama/llama-4-maverick',
+                     'anthropic/claude-3.7-sonnet', 
+                     'qwen/qwen-2.5-7b-instruct', 
+                     'qwen/qwen2.5-32b-instruct',
+                     'anthropic/claude-3.5-sonnet', 
+                     ],
+     **kwargs):
+        return cls(*args, models=models, n_samples=n_samples, **kwargs).epoch()
 
 
 def main():

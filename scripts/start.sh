@@ -11,13 +11,15 @@ else
   NAME=$1
 fi
 
+./stop.sh $NAME
+
 docker run -d \
   --name $NAME \
   --network=host \
   --restart unless-stopped \
   --privileged --shm-size 4g \
   -v $PWD:/app \
-  -v /root/.{$REPO}:/root/.{$REPO} \
+  -v ~/.$REPO:/root/.$REPO \
   -v /var/run/docker.sock:/var/run/docker.sock \
   $REPO
 

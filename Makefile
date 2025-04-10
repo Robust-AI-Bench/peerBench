@@ -1,4 +1,4 @@
-SCRIPTS_PATH=./scripts/docker
+SCRIPTS_PATH=./scripts
 build:
 	${SCRIPTS_PATH}/build.sh 
 start:
