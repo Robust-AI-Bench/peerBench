@@ -92,7 +92,7 @@ class Val:
         data['validator'] = self.key.address
         data['time_start'] = start_time
         data['time_end'] = time.time()
-        data['time_delta'] = data['time_end'] - data['time_start']
+        data['speed'] = data['time_end'] - data['time_start']
         # generate token over sorted keys (sorted to avoid non-collisions due to key order)
         data = {k: data[k] for k in sorted(data.keys())}
         # jwt token that involves the hash of the data
@@ -271,7 +271,7 @@ class Val:
                             self.completed_samples += len(show_results)
 
                             print(buffer, f'Progress({self.completed_samples}/{self.total_samples})', buffer)
-                            print(df[['sample_cid', 'model', 'score', 'time_delta']], '\n')
+                            print(df[['sample_cid', 'model', 'score', 'speed']], '\n')
                             show_results = []
 
                     else:
@@ -323,7 +323,7 @@ class Val:
         results = self.process_results(results)
         return results
 
-    def process_results(self,results, features = ['model', 'score', 'time_delta']):
+    def process_results(self,results, features = ['model', 'score', 'speed']):
         """
         Process the results of the epoch
         """
@@ -338,7 +338,7 @@ class Val:
         results = results.sort_values(by='score', ascending=False)
         results['n_samples'] = results['score'].apply(lambda x: len(x))
         results['score'] = results['score'].apply(lambda x: sum(x)/len(x))
-        results['time_delta'] = results['time_delta'].apply(lambda x: sum(x)/len(x))
+        results['speed'] = results['speed'].apply(lambda x: sum(x)/len(x))
         # count the number o n_samples per model
         results = results.sort_values(by=['score'], ascending=[False])
         print(f'Epoch complete! Processed {len(results)} results successfully')
@@ -472,8 +472,8 @@ class Val:
                      ], **task_params):
 
         return cls(*args, models=models, n_samples=n_samples, timeout=timeout, task_params=task_params).epoch()
-        
-def main():
-    return Val().cli()
+    @staticmethod
+    def main():
+        return Val().cli()
 
 

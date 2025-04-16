@@ -1,3 +1,3 @@
 
-from .core import Val
+from .module import Val
 Val.init(globals())

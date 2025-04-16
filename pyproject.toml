@@ -51,7 +51,6 @@ py-ed25519-zebra-bindings = ">=1.0"
 py-bip39-bindings = ">=0.1.9"
 twine = "*"
 psutil = "*"
-math500 = "*"
 
 [tool.poetry.group.dev]
 optional = true
