@@ -281,8 +281,9 @@ class Val:
                 except Exception as e:
                     if self.verbose:
                         print(f'❌BatchError({e})❌')
-        except TimeoutError as e:
-            print(f'Timeout error: {e}')
+        except Exception as e:
+            if self.verbose:
+                print(f'❌TimeoutError({e})❌')
         
         return results
 
@@ -447,7 +448,6 @@ class Val:
             def wrapper_fn(util, *args, **kwargs):
                 import importlib
                 fn = obj(f'val.utils.{util}')
-                import commune as c
                 return fn(*args, **kwargs)
             setattr(cls, util, partial(wrapper_fn, util))
 
