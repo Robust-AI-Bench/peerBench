@@ -276,14 +276,6 @@ def obj(name:str, **kwargs):
     else:
         return __import__(name)
 
-def module(name:str, **kwargs):
-    _tree = tree()
-    if name in _tree:
-        name = _tree[name]
-    return obj(name)
-
-
-
 
 def submit(func, *args, **kwargs):
     t = threading.Thread(target=func, args=args, kwargs=kwargs)

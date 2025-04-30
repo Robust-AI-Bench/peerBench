@@ -117,11 +117,7 @@ class Key:
             raise ValueError(f'crypto_type {crypto_type} not supported')
         return crypto_type
 
-    @property
-    def shorty(self):
-        n = 4
-        return self.key_address[:n] + '...' + self.key_address[-n:]
-
+        
     def add_key(self, path:str,  crypto_type=None, mnemonic:str = None, refresh:bool=True, private_key=None, **kwargs):
         crypto_type = self.get_crypto_type(crypto_type)
         key_exists = self.key_exists(path, crypto_type=crypto_type)
@@ -553,6 +549,7 @@ class Key:
         
         return results
     
+   
     def get_token(self, 
                     data: Dict='hey', 
                      key:Optional[str]=None,  

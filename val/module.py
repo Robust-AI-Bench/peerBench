@@ -22,7 +22,7 @@ class Val:
     def __init__(self,
 
                     # TASK
-                    task : str= 'math500', # score function
+                    task : str= 'add', # score function
                     task_params = {}, # the parameters for the task
 
                     # MODEL
@@ -146,7 +146,6 @@ class Val:
         if isinstance(task, str):
             task_name = task
             task = self.module('task.'+task)()
-            print(f'Loading task {task_name}', task)
         else:
             task_name = task.__class__.__name__.lower()
         assert hasattr(task, 'forward'), f'Task {task} does not have a forward function'
@@ -219,7 +218,7 @@ class Val:
         return results
 
     # TODO: UPLOAD THE AGGREGATE FUNCTION TO SERVER
-    def results(self, task = None, **kwargs):
+    def results(self, task = None, min_n_samples=1,  **kwargs):
         self.set_task(task)
         aggfn = self.task.aggregate if hasattr(self.task, 'aggregate') else self.aggregate
         data = self.store.items()
@@ -230,6 +229,7 @@ class Val:
         else:
             data = df(data)
             data = aggfn(data, **kwargs)
+        
         return data
 
     def _rm_all_store(self):
@@ -287,12 +287,17 @@ class Val:
         
         return results
 
-    def epoch(self, task:Optional[str]=None, models:Optional[List[str]]=None, n_samples=None,**kwargs):
+
+    def epoch(self, 
+            task:Optional[str]='math500', 
+            models:Optional[List[str]]=None, 
+            n_samples=None,
+            **kwargs):
         buffer = f'\n{"-"*42}\n'
 
         self.set_task(task)
         self.set_models(models)
-        n_samples = n_samples or self.n_samples
+        self.n_samples = n_samples or self.n_samples
         n_models = len(self.models)
         results = []
         epoch_info = {
@@ -304,6 +309,7 @@ class Val:
         }
         print(buffer, f'Epoch({self.epoch_time})', buffer, epoch_info, buffer)
         futures = []
+        n_samples = n_samples or self.n_samples
         self.total_samples = n_samples * n_models
         self.completed_samples = 0
         for sample_idx in range(self.n_samples):
@@ -345,9 +351,13 @@ class Val:
         print(f'Epoch complete! Processed {len(results)} results successfully')
         return results
     
-    @classmethod
-    def module(cls, module_name):
-        return module(module_name)
+
+    def module(self, name:str, **kwargs):
+        _tree = tree()
+        if name in _tree:
+            name = _tree[name]
+        return obj(name)
+
 
     def utils(self):
         from functools import partial
@@ -400,17 +410,21 @@ class Val:
         """
         t0 = time.time()
         argv = sys.argv[1:]
-        fn = argv.pop(0)
-        if '/' in fn:
+
+        if hasattr(self, argv[0]):
+            fn = argv.pop(0)
+            module_obj = self
+        elif '/' in argv[0]:
+            fn = argv.pop(0)
             module_path = '/'.join(fn.split('/')[:-1]).replace('/', '.')
-            module_obj = module(module_path)()
+            module = self.module(module_path)()
             if fn.endswith('/'):
                 fn = default_fn
             fn = fn.split('/')[-1]
-
-        else:
-            module_obj = self
-        fn_obj = getattr(module_obj, fn)
+        else: 
+            module = self.module(argv.pop(0))()
+            fn = argv.pop(0)
+        fn_obj = getattr(module, fn)
         args = []
         kwargs = {}
         parsing_kwargs = False
@@ -422,7 +436,7 @@ class Val:
             else:
                 assert parsing_kwargs is False, 'Cannot mix positional and keyword arguments'
                 args.append(str2python(arg))
-        module_name = module_obj.__class__.__name__.lower()
+        module_name = module.__class__.__name__.lower()
         # remove the self and kwargs from the params
         print(f'Running({module_name}/{fn})')
 
@@ -462,14 +476,17 @@ class Val:
     @classmethod
     def run(cls, *args, 
             task='math500',
-            n_samples=10,
+            n_samples=200,
             timeout = 10,
-            models= [ 'meta-llama/llama-4-maverick',
-                     'anthropic/claude-3.7-sonnet', 
-                     'qwen/qwen-2.5-7b-instruct', 
-                     'qwen/qwen2.5-32b-instruct',
-                     'anthropic/claude-3.5-sonnet', 
-                     ], **task_params):
+            models = [
+                "chatgpt-4o-latest",
+                "gemini-2.0-flash-001",
+                "llama-4-maverick",
+                "gemini-2.0-flash-lite-001",
+                "mistral-small-3.1-24b-instruct",
+                "llama-4-scout",
+            ],
+            **task_params):
 
         return cls(*args, models=models, n_samples=n_samples, timeout=timeout, task_params=task_params).epoch()
     @staticmethod
